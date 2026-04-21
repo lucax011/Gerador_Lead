@@ -1,7 +1,6 @@
-version: "3.9"
-
 # Extends docker-compose.yml for local development with hot-reload via volume mounts.
 # Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
 
 services:
   scraper:
