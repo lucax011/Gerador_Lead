@@ -1,24 +1,17 @@
 import logging
 import re
-from dataclasses import dataclass
+from uuid import UUID
 
 import httpx
 from bs4 import BeautifulSoup
 
+from services.scraper.sources.base import BaseSource, RawLead
+
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class RawLead:
-    name: str
-    email: str
-    phone: str | None
-    company: str | None
-    source_url: str
-
-
-class WebScraper:
-    """Scrapes contact/lead information from target URLs.
+class WebScraperSource(BaseSource):
+    """Scrapes contact/lead information from a list of target URLs.
 
     Extracts structured data from HTML pages looking for common patterns:
     name+email combos, contact cards, table rows, etc.
@@ -27,14 +20,32 @@ class WebScraper:
     EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
     PHONE_RE = re.compile(r"(?:\+?\d[\d\s\-().]{7,}\d)")
 
-    def __init__(self, user_agent: str, timeout: int = 15) -> None:
+    def __init__(
+        self,
+        urls: list[str],
+        user_agent: str,
+        niche_id: UUID | None = None,
+        timeout: int = 15,
+    ) -> None:
+        self._urls = urls
+        self._niche_id = niche_id
         self._client = httpx.AsyncClient(
             headers={"User-Agent": user_agent},
             timeout=timeout,
             follow_redirects=True,
         )
 
-    async def scrape(self, url: str) -> list[RawLead]:
+    @property
+    def source_name(self) -> str:
+        return "web_scraping"
+
+    async def fetch(self) -> list[RawLead]:
+        results: list[RawLead] = []
+        for url in self._urls:
+            results.extend(await self._scrape_url(url))
+        return results
+
+    async def _scrape_url(self, url: str) -> list[RawLead]:
         try:
             response = await self._client.get(url)
             response.raise_for_status()
@@ -45,13 +56,11 @@ class WebScraper:
         soup = BeautifulSoup(response.text, "html.parser")
         leads: list[RawLead] = []
 
-        # Strategy 1: look for contact cards with class heuristics
         for card in soup.select(".contact, .lead, .person, article, .card"):
             lead = self._extract_from_element(card, url)
             if lead:
                 leads.append(lead)
 
-        # Strategy 2: scan plain text for email+name pairs when no cards found
         if not leads:
             leads.extend(self._extract_from_text(soup.get_text(), url))
 
@@ -63,27 +72,28 @@ class WebScraper:
         emails = self.EMAIL_RE.findall(text)
         if not emails:
             return None
-
         phones = self.PHONE_RE.findall(text)
-        name = self._guess_name(element, text)
-        company = self._guess_company(element, text)
-
         return RawLead(
-            name=name or "Unknown",
+            name=self._guess_name(element) or "Unknown",
             email=emails[0],
             phone=phones[0].strip() if phones else None,
-            company=company,
-            source_url=source_url,
+            company=self._guess_company(element),
+            niche_id=self._niche_id,
+            extra={"source_url": source_url},
         )
 
     def _extract_from_text(self, text: str, source_url: str) -> list[RawLead]:
-        leads = []
-        emails = self.EMAIL_RE.findall(text)
-        for email in emails:
-            leads.append(RawLead(name="Unknown", email=email, phone=None, company=None, source_url=source_url))
-        return leads
+        return [
+            RawLead(
+                name="Unknown",
+                email=email,
+                niche_id=self._niche_id,
+                extra={"source_url": source_url},
+            )
+            for email in self.EMAIL_RE.findall(text)
+        ]
 
-    def _guess_name(self, element, text: str) -> str | None:
+    def _guess_name(self, element) -> str | None:
         for selector in ["h1", "h2", "h3", ".name", "[class*='name']", "strong"]:
             tag = element.select_one(selector)
             if tag:
@@ -92,7 +102,7 @@ class WebScraper:
                     return candidate
         return None
 
-    def _guess_company(self, element, text: str) -> str | None:
+    def _guess_company(self, element) -> str | None:
         for selector in [".company", ".organization", "[class*='company']", "[class*='org']"]:
             tag = element.select_one(selector)
             if tag:

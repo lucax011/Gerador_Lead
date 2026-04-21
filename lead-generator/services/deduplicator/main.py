@@ -43,6 +43,7 @@ async def upsert_lead(lead: Lead) -> None:
             company=lead.company,
             source=lead.source,
             status=lead.status,
+            niche_id=lead.niche_id,
             metadata_=lead.metadata,
             created_at=lead.created_at,
             updated_at=lead.updated_at,

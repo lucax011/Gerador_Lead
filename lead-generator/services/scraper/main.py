@@ -1,6 +1,8 @@
 """Scraper Worker
 
-Periodically scrapes target URLs and publishes LeadCapturedEvent to RabbitMQ.
+Iterates all registered sources, collects RawLeads and publishes
+LeadCapturedEvent to RabbitMQ. New sources are added via SourceRegistry
+without touching this file.
 """
 import asyncio
 import logging
@@ -9,14 +11,14 @@ from pathlib import Path
 
 import structlog
 
-# Allow imports from repo root when running as standalone
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from shared.broker.rabbitmq import RabbitMQPublisher
 from shared.config import get_settings
 from shared.models.events import LeadCapturedEvent
 from shared.models.lead import Lead, LeadSource, LeadStatus
-from services.scraper.sources.web_scraper import WebScraper
+from services.scraper.registry import SourceRegistry
+from services.scraper.sources.web_scraper import WebScraperSource
 
 settings = get_settings()
 
@@ -32,19 +34,51 @@ structlog.configure(
 log = structlog.get_logger(__name__)
 
 
-async def scrape_and_publish(publisher: RabbitMQPublisher, scraper: WebScraper) -> None:
-    for url in settings.scraper_urls_list:
-        log.info("Scraping URL", url=url)
-        raw_leads = await scraper.scrape(url)
+def build_registry() -> SourceRegistry:
+    """Register all active sources here.
+
+    To activate a new source:
+        1. Import its class
+        2. Instantiate with its config
+        3. Call registry.register(instance)
+    """
+    registry = SourceRegistry()
+
+    if settings.scraper_urls_list:
+        registry.register(
+            WebScraperSource(
+                urls=settings.scraper_urls_list,
+                user_agent=settings.scraper_user_agent,
+            )
+        )
+
+    # Future sources — uncomment when implemented:
+    # registry.register(CsvSource(path=settings.csv_leads_path))
+    # registry.register(ApiSource(endpoint=settings.api_leads_url, token=settings.api_token))
+    # registry.register(LinkedInSource(cookie=settings.linkedin_cookie))
+
+    return registry
+
+
+async def run_cycle(publisher: RabbitMQPublisher, registry: SourceRegistry) -> None:
+    for source in registry.all():
+        log.info("Fetching from source", source=source.source_name)
+        try:
+            raw_leads = await source.fetch()
+        except Exception:
+            log.exception("Source fetch failed", source=source.source_name)
+            continue
+
         for raw in raw_leads:
             lead = Lead(
                 name=raw.name,
                 email=raw.email,
                 phone=raw.phone,
                 company=raw.company,
-                source=LeadSource.WEB_SCRAPING,
+                niche_id=raw.niche_id,
+                source=LeadSource(source.source_name),
                 status=LeadStatus.CAPTURED,
-                metadata={"source_url": raw.source_url},
+                metadata=raw.extra,
             )
             event = LeadCapturedEvent(lead=lead)
             try:
@@ -57,21 +91,21 @@ async def scrape_and_publish(publisher: RabbitMQPublisher, scraper: WebScraper) 
 async def main() -> None:
     log.info("Scraper worker starting")
     publisher = RabbitMQPublisher(settings.rabbitmq_url)
-    scraper = WebScraper(user_agent=settings.scraper_user_agent)
+    registry = build_registry()
 
     await publisher.connect()
-    log.info("Connected to RabbitMQ")
+    log.info("Connected to RabbitMQ", sources=len(list(registry.all())))
 
     try:
         while True:
             try:
-                await scrape_and_publish(publisher, scraper)
+                await run_cycle(publisher, registry)
             except Exception:
                 log.exception("Error during scrape cycle")
             log.info("Sleeping until next cycle", seconds=settings.scraper_interval_seconds)
             await asyncio.sleep(settings.scraper_interval_seconds)
     finally:
-        await scraper.close()
+        await registry.close_all()
         await publisher.close()
 
 

@@ -30,6 +30,7 @@ class Lead(BaseModel):
     source: LeadSource
     status: LeadStatus = LeadStatus.CAPTURED
     score: float | None = None
+    niche_id: UUID | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
