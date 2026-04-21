@@ -1,0 +1,60 @@
+version: "3.9"
+
+# Extends docker-compose.yml for local development with hot-reload via volume mounts.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  scraper:
+    build:
+      target: development
+    volumes:
+      - ../services/scraper:/app/services/scraper
+      - ../shared:/app/shared
+    environment:
+      LOG_LEVEL: DEBUG
+      ENVIRONMENT: development
+    command: watchmedo auto-restart --directory=/app --pattern="*.py" --recursive -- python services/scraper/main.py
+
+  validator:
+    build:
+      target: development
+    volumes:
+      - ../services/validator:/app/services/validator
+      - ../shared:/app/shared
+    environment:
+      LOG_LEVEL: DEBUG
+      ENVIRONMENT: development
+    command: watchmedo auto-restart --directory=/app --pattern="*.py" --recursive -- python services/validator/main.py
+
+  deduplicator:
+    build:
+      target: development
+    volumes:
+      - ../services/deduplicator:/app/services/deduplicator
+      - ../shared:/app/shared
+    environment:
+      LOG_LEVEL: DEBUG
+      ENVIRONMENT: development
+    command: watchmedo auto-restart --directory=/app --pattern="*.py" --recursive -- python services/deduplicator/main.py
+
+  scorer:
+    build:
+      target: development
+    volumes:
+      - ../services/scorer:/app/services/scorer
+      - ../shared:/app/shared
+    environment:
+      LOG_LEVEL: DEBUG
+      ENVIRONMENT: development
+    command: watchmedo auto-restart --directory=/app --pattern="*.py" --recursive -- python services/scorer/main.py
+
+  distributor:
+    build:
+      target: development
+    volumes:
+      - ../services/distributor:/app/services/distributor
+      - ../shared:/app/shared
+    environment:
+      LOG_LEVEL: DEBUG
+      ENVIRONMENT: development
+    command: watchmedo auto-restart --directory=/app --pattern="*.py" --recursive -- python services/distributor/main.py
