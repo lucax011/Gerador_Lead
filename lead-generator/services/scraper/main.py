@@ -8,15 +8,19 @@ import asyncio
 import logging
 import sys
 from pathlib import Path
+from uuid import UUID
 
 import structlog
+from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from shared.broker.rabbitmq import RabbitMQPublisher
 from shared.config import get_settings
+from shared.database.models import SourceORM
+from shared.database.session import AsyncSessionLocal
 from shared.models.events import LeadCapturedEvent
-from shared.models.lead import Lead, LeadSource, LeadStatus
+from shared.models.lead import Lead, LeadStatus
 from services.scraper.registry import SourceRegistry
 from services.scraper.sources.web_scraper import WebScraperSource
 
@@ -60,6 +64,15 @@ def build_registry() -> SourceRegistry:
     return registry
 
 
+async def resolve_source_id(source_name: str) -> tuple[UUID, str]:
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(SourceORM).where(SourceORM.name == source_name))
+        source_orm = result.scalar_one_or_none()
+        if source_orm is None:
+            raise ValueError(f"Source '{source_name}' not found in database. Add it to the sources table first.")
+        return source_orm.id, source_orm.name
+
+
 async def run_cycle(publisher: RabbitMQPublisher, registry: SourceRegistry) -> None:
     for source in registry.all():
         log.info("Fetching from source", source=source.source_name)
@@ -69,6 +82,12 @@ async def run_cycle(publisher: RabbitMQPublisher, registry: SourceRegistry) -> N
             log.exception("Source fetch failed", source=source.source_name)
             continue
 
+        try:
+            source_id, source_name = await resolve_source_id(source.source_name)
+        except ValueError:
+            log.error("Source not registered in DB — skipping", source=source.source_name)
+            continue
+
         for raw in raw_leads:
             lead = Lead(
                 name=raw.name,
@@ -76,7 +95,8 @@ async def run_cycle(publisher: RabbitMQPublisher, registry: SourceRegistry) -> N
                 phone=raw.phone,
                 company=raw.company,
                 niche_id=raw.niche_id,
-                source=LeadSource(source.source_name),
+                source_id=source_id,
+                source_name=source_name,
                 status=LeadStatus.CAPTURED,
                 metadata=raw.extra,
             )

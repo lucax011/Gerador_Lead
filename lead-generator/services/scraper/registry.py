@@ -1,7 +1,7 @@
 """Source Registry
 
 Central place to register and retrieve lead sources.
-Each source is identified by its source_name (matches LeadSource enum value).
+Each source is identified by its source_name (must match the `name` column in the sources table).
 
 Usage:
     registry = SourceRegistry()

@@ -40,31 +40,41 @@ async def mark_distributed(lead_id) -> None:
         await session.commit()
 
 
+RETRY_DELAYS = [5, 15, 30]  # segundos entre tentativas
+
+
+async def send_with_retry(lead_data: dict, score: float, temperature: str) -> bool:
+    for attempt, delay in enumerate(RETRY_DELAYS, start=1):
+        sent = await telegram.send(lead_data, score, temperature)
+        if sent:
+            return True
+        log.warning("Telegram attempt failed, retrying", attempt=attempt, delay=delay, lead_id=lead_data.get("id"))
+        await asyncio.sleep(delay)
+    return await telegram.send(lead_data, score, temperature)
+
+
 async def handle_lead_scored(payload: dict[str, Any]) -> None:
     lead_data = payload["lead"]
     score = payload["score"]
     temperature = payload["temperature"]
     lead = Lead(**lead_data)
 
-    log.info(
-        "Distributing lead",
-        lead_id=str(lead.id),
-        score=score,
-        temperature=temperature,
-    )
+    log.info("Distributing lead", lead_id=str(lead.id), score=score, temperature=temperature)
 
-    sent = await telegram.send(lead_data, score, temperature)
+    if temperature == "COLD":
+        log.info("COLD lead — saved for scheduled recontact, skipping immediate Telegram", lead_id=str(lead.id))
+        await mark_distributed(lead.id)
+        return
+
+    sent = await send_with_retry(lead_data, score, temperature)
 
     if sent:
         lead.status = LeadStatus.DISTRIBUTED
         await mark_distributed(lead.id)
         log.info("Lead distributed via Telegram", lead_id=str(lead.id), temperature=temperature)
     else:
-        log.error("Distribution failed — routing to dead-letter", lead_id=str(lead.id))
-        await publisher.publish_to_dead_letter(
-            payload,
-            reason="Telegram delivery failed",
-        )
+        log.error("All Telegram retries exhausted — routing to dead-letter", lead_id=str(lead.id))
+        await publisher.publish_to_dead_letter(payload, reason="Telegram delivery failed after retries")
 
 
 async def main() -> None:

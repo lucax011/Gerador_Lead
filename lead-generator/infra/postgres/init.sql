@@ -16,7 +16,6 @@ CREATE TABLE IF NOT EXISTS niches (
 
 CREATE INDEX IF NOT EXISTS idx_niches_slug ON niches (slug);
 
--- Seed: nichos iniciais de exemplo
 INSERT INTO niches (id, name, slug, description) VALUES
     (uuid_generate_v4(), 'Tecnologia',        'tecnologia',        'Empresas e profissionais de TI, SaaS, startups'),
     (uuid_generate_v4(), 'Saúde e Bem-estar', 'saude-bem-estar',   'Clínicas, planos de saúde, suplementos'),
@@ -28,6 +27,30 @@ INSERT INTO niches (id, name, slug, description) VALUES
     (uuid_generate_v4(), 'Indústria',         'industria',         'Manufatura, automação industrial, B2B')
 ON CONFLICT (slug) DO NOTHING;
 
+-- ── Sources ───────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS sources (
+    id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name                  VARCHAR(50)   NOT NULL UNIQUE,
+    label                 VARCHAR(100)  NOT NULL,
+    channel               VARCHAR(50)   NOT NULL,
+    base_score_multiplier FLOAT         NOT NULL DEFAULT 0.5,
+    is_active             BOOLEAN       NOT NULL DEFAULT TRUE,
+    created_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sources_name ON sources (name);
+
+-- Seed: fontes iniciais
+INSERT INTO sources (id, name, label, channel, base_score_multiplier) VALUES
+    (uuid_generate_v4(), 'paid_traffic',  'Tráfego Pago',    'paid',    1.0),
+    (uuid_generate_v4(), 'chatbot',       'Chatbot',         'direct',  0.7),
+    (uuid_generate_v4(), 'web_scraping',  'Web Scraping',    'organic', 0.4),
+    (uuid_generate_v4(), 'meta_ads',      'Meta Ads',        'paid',    1.0),
+    (uuid_generate_v4(), 'google_ads',    'Google Ads',      'paid',    1.0),
+    (uuid_generate_v4(), 'whatsapp',      'WhatsApp',        'direct',  0.8),
+    (uuid_generate_v4(), 'csv_import',    'Importação CSV',  'manual',  0.6)
+ON CONFLICT (name) DO NOTHING;
+
 -- ── Leads ─────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS leads (
     id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -35,7 +58,7 @@ CREATE TABLE IF NOT EXISTS leads (
     email       VARCHAR(320)  NOT NULL,
     phone       VARCHAR(30),
     company     VARCHAR(255),
-    source      VARCHAR(50)   NOT NULL,
+    source_id   UUID          NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
     status      VARCHAR(50)   NOT NULL DEFAULT 'captured',
     niche_id    UUID          REFERENCES niches(id) ON DELETE SET NULL,
     metadata    JSONB         NOT NULL DEFAULT '{}',
@@ -44,10 +67,10 @@ CREATE TABLE IF NOT EXISTS leads (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_leads_email ON leads (LOWER(email));
-CREATE INDEX IF NOT EXISTS idx_leads_status   ON leads (status);
-CREATE INDEX IF NOT EXISTS idx_leads_source   ON leads (source);
-CREATE INDEX IF NOT EXISTS idx_leads_niche_id ON leads (niche_id);
-CREATE INDEX IF NOT EXISTS idx_leads_created  ON leads (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_leads_status    ON leads (status);
+CREATE INDEX IF NOT EXISTS idx_leads_source_id ON leads (source_id);
+CREATE INDEX IF NOT EXISTS idx_leads_niche_id  ON leads (niche_id);
+CREATE INDEX IF NOT EXISTS idx_leads_created   ON leads (created_at DESC);
 
 -- ── Scores ────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS scores (

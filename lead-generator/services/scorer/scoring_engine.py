@@ -1,8 +1,7 @@
 from dataclasses import dataclass
-from typing import Any
 
 from shared.config import get_settings
-from shared.models.lead import Lead, LeadSource
+from shared.models.lead import Lead
 
 settings = get_settings()
 
@@ -30,7 +29,7 @@ class ScoringEngine:
 
     Criteria:
     - data_completeness (default 40 pts): all core fields present & non-empty
-    - source             (default 25 pts): paid_traffic > chatbot > web_scraping
+    - source             (default 25 pts): driven by source.base_score_multiplier from DB
     - phone_present      (default 20 pts): phone number provided
     - email_domain       (default 15 pts): corporate or trusted domain
     """
@@ -41,11 +40,11 @@ class ScoringEngine:
         self.w_phone = settings.score_weight_phone_present
         self.w_domain = settings.score_weight_email_domain
 
-    def score(self, lead: Lead) -> ScoreResult:
+    def score(self, lead: Lead, source_multiplier: float) -> ScoreResult:
         breakdown: dict[str, float] = {}
 
         breakdown["data_completeness"] = self._score_completeness(lead)
-        breakdown["source"] = self._score_source(lead)
+        breakdown["source"] = round(source_multiplier * self.w_source, 2)
         breakdown["phone_present"] = self._score_phone(lead)
         breakdown["email_domain"] = self._score_domain(lead)
 
@@ -58,20 +57,10 @@ class ScoringEngine:
     def _score_completeness(self, lead: Lead) -> float:
         fields = [lead.name, lead.email, lead.phone, lead.company]
         filled = sum(1 for f in fields if f and str(f).strip())
-        # name+email are mandatory so weight them more: 60% mandatory, 40% optional
         mandatory_score = (1.0 if lead.name else 0) * 0.5 + (1.0 if lead.email else 0) * 0.5
         optional_score = filled / len(fields)
         raw = mandatory_score * 0.6 + optional_score * 0.4
         return round(raw * self.w_completeness, 2)
-
-    def _score_source(self, lead: Lead) -> float:
-        source_multipliers = {
-            LeadSource.PAID_TRAFFIC: 1.0,
-            LeadSource.CHATBOT: 0.7,
-            LeadSource.WEB_SCRAPING: 0.4,
-        }
-        multiplier = source_multipliers.get(lead.source, 0.0)  # type: ignore[arg-type]
-        return round(multiplier * self.w_source, 2)
 
     def _score_phone(self, lead: Lead) -> float:
         return float(self.w_phone) if lead.phone and lead.phone.strip() else 0.0
@@ -82,7 +71,6 @@ class ScoringEngine:
         domain = lead.email.split("@")[-1].lower()
         if domain in TRUSTED_DOMAINS:
             return round(self.w_domain * 0.6, 2)
-        # Corporate domain heuristic
         if any(domain.endswith(p) for p in CORPORATE_DOMAIN_PATTERNS) and "." in domain:
             return round(self.w_domain * 1.0, 2)
         return round(self.w_domain * 0.3, 2)

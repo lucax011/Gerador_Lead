@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, Float, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -23,6 +23,20 @@ class NicheORM(Base):
     leads: Mapped[list["LeadORM"]] = relationship("LeadORM", back_populates="niche")
 
 
+class SourceORM(Base):
+    __tablename__ = "sources"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
+    name: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    label: Mapped[str] = mapped_column(String(100), nullable=False)
+    channel: Mapped[str] = mapped_column(String(50), nullable=False)
+    base_score_multiplier: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+
+    leads: Mapped[list["LeadORM"]] = relationship("LeadORM", back_populates="source_rel")
+
+
 class LeadORM(Base):
     __tablename__ = "leads"
 
@@ -31,7 +45,9 @@ class LeadORM(Base):
     email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
     phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
     company: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    source: Mapped[str] = mapped_column(String(50), nullable=False)
+    source_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("sources.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="captured")
     niche_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("niches.id", ondelete="SET NULL"), nullable=True, index=True
@@ -41,6 +57,7 @@ class LeadORM(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     niche: Mapped["NicheORM | None"] = relationship("NicheORM", back_populates="leads")
+    source_rel: Mapped["SourceORM"] = relationship("SourceORM", back_populates="leads")
     scores: Mapped[list["ScoreORM"]] = relationship("ScoreORM", back_populates="lead", cascade="all, delete-orphan")
 
 

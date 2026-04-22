@@ -25,7 +25,7 @@ class BaseSource(ABC):
     @property
     @abstractmethod
     def source_name(self) -> str:
-        """Unique identifier for this source (matches LeadSource enum value)."""
+        """Unique identifier for this source — must match the `name` column in the sources table."""
 
     @abstractmethod
     async def fetch(self) -> list[RawLead]:

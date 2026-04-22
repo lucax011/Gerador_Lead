@@ -15,19 +15,14 @@ class LeadStatus(str, Enum):
     REJECTED = "rejected"
 
 
-class LeadSource(str, Enum):
-    WEB_SCRAPING = "web_scraping"
-    CHATBOT = "chatbot"
-    PAID_TRAFFIC = "paid_traffic"
-
-
 class Lead(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     name: str = Field(..., min_length=2, max_length=255)
     email: EmailStr
     phone: str | None = Field(default=None, max_length=30)
     company: str | None = Field(default=None, max_length=255)
-    source: LeadSource
+    source_id: UUID
+    source_name: str
     status: LeadStatus = LeadStatus.CAPTURED
     score: float | None = None
     niche_id: UUID | None = None

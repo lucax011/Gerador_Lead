@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from shared.broker.rabbitmq import RabbitMQConsumer, RabbitMQPublisher
 from shared.config import get_settings
-from shared.database.models import LeadORM, ScoreORM
+from shared.database.models import LeadORM, ScoreORM, SourceORM
 from shared.database.session import AsyncSessionLocal
 from shared.models.events import LeadScoredEvent
 from shared.models.lead import Lead, LeadStatus
@@ -32,6 +32,19 @@ log = structlog.get_logger(__name__)
 
 publisher: RabbitMQPublisher
 engine = ScoringEngine()
+
+_source_multiplier_cache: dict[str, float] = {}
+
+
+async def get_source_multiplier(source_name: str) -> float:
+    if source_name in _source_multiplier_cache:
+        return _source_multiplier_cache[source_name]
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(SourceORM).where(SourceORM.name == source_name))
+        source_orm = result.scalar_one_or_none()
+        multiplier = source_orm.base_score_multiplier if source_orm else 0.0
+    _source_multiplier_cache[source_name] = multiplier
+    return multiplier
 
 
 async def persist_score(lead: Lead, result) -> None:
@@ -54,7 +67,8 @@ async def handle_lead_deduplicated(payload: dict[str, Any]) -> None:
     lead = Lead(**lead_data)
     log.info("Scoring lead", lead_id=str(lead.id), email=lead.email)
 
-    result = engine.score(lead)
+    source_multiplier = await get_source_multiplier(lead.source_name)
+    result = engine.score(lead, source_multiplier)
     lead.status = LeadStatus.SCORED
     lead.score = result.total
 

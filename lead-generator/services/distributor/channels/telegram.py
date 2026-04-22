@@ -10,16 +10,9 @@ TEMPERATURE_EMOJI = {
     "COLD": "🧊",
 }
 
-SOURCE_LABEL = {
-    "web_scraping": "Web Scraping",
-    "chatbot": "Chatbot",
-    "paid_traffic": "Tráfego Pago",
-}
-
-
 def format_message(lead: dict, score: float, temperature: str) -> str:
     emoji = TEMPERATURE_EMOJI.get(temperature, "❓")
-    source_label = SOURCE_LABEL.get(lead.get("source", ""), lead.get("source", "N/A"))
+    source_label = lead.get("source_name") or "N/A"
     phone = lead.get("phone") or "Não informado"
     company = lead.get("company") or "Não informada"
 
