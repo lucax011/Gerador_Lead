@@ -1,7 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(docker compose *)"
+      "Bash(docker compose *)",
+      "Bash(python -c \"import os; os.makedirs\\('d:/Projects/Gerador_Lead/lead-generator/shared/database/migrations/versions', exist_ok=True\\); print\\('OK'\\)\")",
+      "Bash(python3 -c \"import os; os.makedirs\\('d:/Projects/Gerador_Lead/lead-generator/shared/database/migrations/versions', exist_ok=True\\); print\\('OK'\\)\")",
+      "Bash(cmd.exe /c \"mkdir d:\\\\Projects\\\\Gerador_Lead\\\\lead-generator\\\\shared\\\\database\\\\migrations\\\\versions\")",
+      "Bash(cmd.exe /c \"dir d:\\\\Projects\\\\Gerador_Lead\\\\lead-generator\\\\shared\\\\database\\\\migrations\\\\\" 2>&1)",
+      "Bash(cmd.exe /c \"dir d:\\\\Projects\\\\Gerador_Lead\\\\lead-generator\\\\shared\\\\database\\\\migrations\")",
+      "Bash(docker exec *)",
+      "Bash(docker build *)",
+      "Bash(docker run *)"
     ]
   }
 }

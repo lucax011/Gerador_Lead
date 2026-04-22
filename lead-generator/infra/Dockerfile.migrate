@@ -1,0 +1,15 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir \
+    alembic==1.13.1 \
+    asyncpg==0.29.0 \
+    sqlalchemy[asyncio]==2.0.30 \
+    pydantic==2.7.1 \
+    pydantic-settings==2.3.1
+
+COPY ../shared ./shared
+COPY ../shared/database/migrations ./shared/database/migrations
+
+CMD ["alembic", "-c", "shared/database/migrations/alembic.ini", "upgrade", "head"]
