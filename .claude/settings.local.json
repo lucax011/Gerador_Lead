@@ -9,7 +9,8 @@
       "Bash(cmd.exe /c \"dir d:\\\\Projects\\\\Gerador_Lead\\\\lead-generator\\\\shared\\\\database\\\\migrations\")",
       "Bash(docker exec *)",
       "Bash(docker build *)",
-      "Bash(docker run *)"
+      "Bash(docker run *)",
+      "Bash(py -m pip install pydantic pydantic-settings email-validator)"
     ]
   }
 }

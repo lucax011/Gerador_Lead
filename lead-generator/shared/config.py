@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     hot_score_threshold: int = 70
     warm_score_threshold: int = 40
 
+    # Apify / Instagram
+    apify_token: str | None = None
+    instagram_usernames: str = ""  # comma-separated list of public usernames to fetch
+
     # General
     log_level: str = "INFO"
     environment: str = "development"
@@ -47,6 +51,10 @@ class Settings(BaseSettings):
     @property
     def scraper_urls_list(self) -> list[str]:
         return [u.strip() for u in self.scraper_target_urls.split(",") if u.strip()]
+
+    @property
+    def instagram_usernames_list(self) -> list[str]:
+        return [u.strip() for u in self.instagram_usernames.split(",") if u.strip()]
 
 
 @lru_cache

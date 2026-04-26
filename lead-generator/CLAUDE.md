@@ -80,19 +80,39 @@ via Telegram em tempo real.
 ### Diagrama de tabelas
 
 ```
-niches                    sources                    leads
-──────────────────        ───────────────────────    ──────────────────────────
-id          UUID PK       id          UUID PK        id          UUID PK
-name        VARCHAR UNIQ  name        VARCHAR UNIQ   name        VARCHAR
-slug        VARCHAR UNIQ  label       VARCHAR        email       VARCHAR (idx unique lower)
-description TEXT          channel     VARCHAR        phone       VARCHAR nullable
-is_active   BOOLEAN       base_score_multiplier FLOAT company    VARCHAR nullable
-created_at  TIMESTAMPTZ   is_active   BOOLEAN        source_id   UUID FK → sources
-                          created_at  TIMESTAMPTZ    niche_id    UUID FK → niches nullable
-                                                     status      VARCHAR
-                                                     metadata    JSONB
-                                                     created_at  TIMESTAMPTZ
-                                                     updated_at  TIMESTAMPTZ (auto-trigger)
+campanhas                 niches                    sources
+─────────────────────     ──────────────────        ───────────────────────
+id          UUID PK       id          UUID PK       id          UUID PK
+name        VARCHAR       name        VARCHAR UNIQ  name        VARCHAR UNIQ
+slug        VARCHAR UNIQ  slug        VARCHAR UNIQ  label       VARCHAR
+status      VARCHAR       description TEXT          channel     VARCHAR
+objective   TEXT          is_active   BOOLEAN       base_score_multiplier FLOAT
+source_config JSONB       created_at  TIMESTAMPTZ   is_active   BOOLEAN
+is_active   BOOLEAN                                 created_at  TIMESTAMPTZ
+created_at  TIMESTAMPTZ
+
+leads
+──────────────────────────────────────────────────────
+id                    UUID PK
+name                  VARCHAR
+email                 VARCHAR (unique lower idx)
+phone                 VARCHAR nullable
+company               VARCHAR nullable
+source_id             UUID FK → sources
+campanha_id           UUID FK → campanhas nullable
+niche_id              UUID FK → niches nullable
+status                VARCHAR
+instagram_username    VARCHAR nullable
+instagram_bio         TEXT nullable
+instagram_followers   INTEGER nullable
+instagram_following   INTEGER nullable
+instagram_posts       INTEGER nullable
+instagram_engagement_rate FLOAT nullable
+instagram_account_type    VARCHAR nullable  -- personal | creator | business
+instagram_profile_url     VARCHAR nullable
+metadata              JSONB
+created_at            TIMESTAMPTZ
+updated_at            TIMESTAMPTZ (auto-trigger)
 
 scores
 ──────────────────────
@@ -108,10 +128,24 @@ notes       TEXT nullable
 ### Status do lead (ciclo de vida)
 
 ```
-captured → validated → deduplicated → scored → distributed
-                ↓
-            rejected (DLQ)
+captured → validated → deduplicated → [enriched →] scored → distributed
+                ↓                                               ↓
+            rejected (DLQ)                              contacted → replied → converted
+                                                                            ↘ churned
 ```
+
+| Status | Quem atribui | Descrição |
+|--------|-------------|-----------|
+| `captured` | Scraper | Lead bruto recebido |
+| `validated` | Validator | Passou nas regras de negócio |
+| `deduplicated` | Deduplicator | Novo ou mergeado com existente |
+| `enriched` | Enricher (futuro) | Dados de mercado adicionados |
+| `scored` | Scorer | Score e temperatura calculados |
+| `distributed` | Distributor | Encaminhado ao canal de saída |
+| `contacted` | CRM/manual | Primeira tentativa de contato |
+| `replied` | CRM/manual | Lead respondeu |
+| `converted` | CRM/manual | Virou cliente |
+| `churned` | CRM/manual | Lead frio sem resposta |
 
 ---
 
@@ -173,6 +207,7 @@ Alterar no banco tem efeito imediato (cache do scorer é por processo).
 | `meta_ads` | Meta Ads | paid | 1.0 | 25 pts |
 | `google_ads` | Google Ads | paid | 1.0 | 25 pts |
 | `whatsapp` | WhatsApp | direct | 0.8 | 20 pts |
+| `instagram` | Instagram (Apify) | social | 0.75 | 18.75 pts |
 | `chatbot` | Chatbot | direct | 0.7 | 17.5 pts |
 | `csv_import` | Importação CSV | manual | 0.6 | 15 pts |
 | `web_scraping` | Web Scraping | organic | 0.4 | 10 pts |
@@ -181,12 +216,32 @@ Alterar no banco tem efeito imediato (cache do scorer é por processo).
 
 ## Como Estender o Sistema
 
+### Ativar coleta de Instagram (Apify)
+
+A integração já está implementada. Para ativar:
+
+1. Criar conta em apify.com e obter um API token
+2. Definir no `.env`:
+   ```
+   APIFY_TOKEN=apify_api_xxxxx
+   INSTAGRAM_USERNAMES=perfil1,perfil2,perfil3
+   ```
+3. Fazer rebuild do scraper: `docker compose up --build -d scraper`
+
+Apenas perfis **públicos** são coletados — o Apify acessa os mesmos dados visíveis
+para qualquer navegador anônimo (bio, seguidores, tipo de conta, email de contato
+público). Nenhuma autenticação no Instagram é realizada.
+
+O `source_multiplier` do Instagram é 0.75 — leads com email de contato público no
+perfil de negócios tendem a ser mais qualificados que scraping genérico.
+
 ### Adicionar nova fonte de leads
 
 1. Inserir linha na tabela `sources` — `name` único, `base_score_multiplier` entre 0.0 e 1.0
 2. Criar `services/scraper/sources/minha_fonte.py` implementando `BaseSource`
    - `source_name` deve retornar exatamente o `name` inserido no banco
    - `fetch()` deve retornar `list[RawLead]`
+   - Campos de perfil social vão em `RawLead.extra` com prefixo `instagram_`
 3. Registrar em `build_registry()` em [services/scraper/main.py](services/scraper/main.py)
 4. Nenhuma alteração nos outros workers
 
@@ -268,6 +323,8 @@ Ver [.env.example](.env.example) para lista completa.
 | `TELEGRAM_CHAT_ID` | ID do chat/grupo que recebe os leads |
 | `SCRAPER_TARGET_URLS` | URLs separadas por vírgula para scraping |
 | `SCRAPER_INTERVAL_SECONDS` | Intervalo entre ciclos do scraper (padrão: 300s) |
+| `APIFY_TOKEN` | Token da API Apify (ativa coleta de Instagram quando definido) |
+| `INSTAGRAM_USERNAMES` | Perfis públicos do Instagram separados por vírgula |
 | `HOT_SCORE_THRESHOLD` | Score mínimo para HOT (padrão: 70) |
 | `WARM_SCORE_THRESHOLD` | Score mínimo para WARM (padrão: 40) |
 | `SCORE_WEIGHT_DATA_COMPLETENESS` | Peso completude (padrão: 40) |
@@ -294,6 +351,10 @@ de dados reais e validar os pesos de score com dados concretos.
 ✅ Dead-letter queue para falhas
 ✅ pgAdmin para visualização do banco
 ✅ Infraestrutura Docker Compose completa
+✅ Entidade campanhas com FK em leads
+✅ Ciclo de vida estendido do lead (contacted → replied → converted/churned)
+✅ Campos de perfil Instagram no modelo de dados
+✅ ApifyInstagramSource — coleta pública, ativa via env, pronta para produção
 ```
 
 ---
@@ -385,7 +446,9 @@ Objetivo: qualificação contextual usando dados de mercado e histórico de conv
 
 | Item | Impacto | Quando resolver |
 |------|---------|-----------------|
-| `SOURCE_LABEL` hardcoded no `telegram.py` | Telegram exibe nome errado para fontes novas | Fase 2 — ler `source_name` direto do payload |
 | Cache de `source_multiplier` por processo | Alteração no banco não reflete sem restart do scorer | Fase 3 — TTL de cache ou invalidação via evento |
 | Sem testes automatizados | Regressions não detectadas antes do deploy | Fase 2 — testes unitários no scorer e validator |
-| Alembic migration manual | Migration `a1b2c3d4e5f6` foi escrita à mão | Já funcional, mas gerar via autogenerate na próxima |
+| `campanha_id` não é populado automaticamente | Leads chegam sem vínculo de campanha | Fase 2 — passar `campanha_id` na origem (webhook/CSV) |
+| Scoring não usa campos Instagram | Perfis com muitos seguidores não são bonificados | Fase 3 — adicionar critério `instagram_reach` no scorer |
+| Status `contacted`/`replied`/`converted` não são atualizados | Ciclo de vida para no `distributed` | Fase 3 — endpoint ou worker de atualização de status pós-distribuição |
+| `instagram.invalid` como email fallback | Leads sem email público no Instagram criam email fictício | Fase 2 — filtrar esses leads ou marcar como `email_required=false` |

@@ -1,13 +1,28 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
     pass
+
+
+class CampaignORM(Base):
+    __tablename__ = "campanhas"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    slug: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="draft")
+    objective: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+
+    leads: Mapped[list["LeadORM"]] = relationship("LeadORM", back_populates="campanha")
 
 
 class NicheORM(Base):
@@ -48,14 +63,27 @@ class LeadORM(Base):
     source_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("sources.id", ondelete="RESTRICT"), nullable=False, index=True
     )
+    campanha_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("campanhas.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="captured")
     niche_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("niches.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    # Instagram public profile (populated by ApifyInstagramSource or enricher stage)
+    instagram_username: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    instagram_bio: Mapped[str | None] = mapped_column(Text, nullable=True)
+    instagram_followers: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    instagram_following: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    instagram_posts: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    instagram_engagement_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    instagram_account_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    instagram_profile_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     metadata_: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
+    campanha: Mapped["CampaignORM | None"] = relationship("CampaignORM", back_populates="leads")
     niche: Mapped["NicheORM | None"] = relationship("NicheORM", back_populates="leads")
     source_rel: Mapped["SourceORM"] = relationship("SourceORM", back_populates="leads")
     scores: Mapped[list["ScoreORM"]] = relationship("ScoreORM", back_populates="lead", cascade="all, delete-orphan")
