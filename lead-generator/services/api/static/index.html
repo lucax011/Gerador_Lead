@@ -374,6 +374,13 @@ tr:hover td { background:rgba(255,255,255,.02); }
             </div>
 
             <div class="form-group">
+              <label class="form-label">Campanha</label>
+              <select class="form-select" id="pesquisa-campanha">
+                <option value="">Sem campanha</option>
+              </select>
+            </div>
+
+            <div class="form-group">
               <label class="form-label">Resultados por busca</label>
               <select class="form-select" id="max-results">
                 <option value="5">5 por busca — teste rápido</option>
@@ -425,7 +432,7 @@ tr:hover td { background:rgba(255,255,255,.02); }
           </select>
           <button class="btn btn-ghost" onclick="loadLeads()">↺ Atualizar</button>
         </div>
-        <table><thead><tr><th>Lead</th><th>Score</th><th>Status</th><th>Origem</th><th>Localização</th><th>Capturado</th></tr></thead><tbody id="leads-table"><tr><td colspan="6" style="color:var(--text3);padding:20px;text-align:center">Carregando...</td></tr></tbody></table>
+        <table><thead><tr><th>Lead</th><th>Score</th><th>Status</th><th>Origem</th><th>Localização</th><th>Capturado</th><th>IA</th></tr></thead><tbody id="leads-table"><tr><td colspan="7" style="color:var(--text3);padding:20px;text-align:center">Carregando...</td></tr></tbody></table>
       </div>
     </div>
 
@@ -436,11 +443,20 @@ tr:hover td { background:rgba(255,255,255,.02); }
 
     <!-- ORQUESTRADOR -->
     <div class="content" id="page-orquestrador" style="display:none">
-      <div class="card">
-        <div class="section-title" style="margin-bottom:12px">Orquestrador IA</div>
-        <div style="color:var(--text3);font-size:13px;line-height:1.8">
-          Em construção — aqui ficará a visão das decisões do GPT-4o-mini: oferta recomendada, tom de abordagem e horário ideal por lead.<br><br>
-          <span style="color:var(--accent2);font-family:var(--mono);font-size:11px">Fase 4 do roadmap.</span>
+      <div class="card" style="margin-bottom:0">
+        <div class="section-header" style="margin-bottom:12px">
+          <div class="section-title">Consultar decisão IA por lead</div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+          <input type="text" class="form-input" id="orch-lead-id" placeholder="ID do lead (UUID)" style="flex:1;font-family:var(--mono);font-size:12px">
+          <button class="btn btn-primary" onclick="loadOrchestration()">Consultar</button>
+        </div>
+        <div id="orch-result">
+          <div class="empty-state" style="padding:32px">
+            <div class="empty-icon">🤖</div>
+            <div class="empty-title">Nenhuma consulta ainda</div>
+            <div class="empty-sub">Cole o UUID de um lead que já passou pelo pipeline e clique em Consultar</div>
+          </div>
         </div>
       </div>
     </div>
@@ -550,15 +566,17 @@ async function loadLeads(){
     let leads=await fetch(API_BASE+'/leads?limit=200').then(r=>r.json());
     if(q) leads=leads.filter(l=>l.nome.toLowerCase().includes(q)||l.email.includes(q));
     if(st) leads=leads.filter(l=>l.status===st);
+    const statusOpts=['novo','abordado','respondeu','qualificado','convertido','descartado'];
     tbody.innerHTML=leads.map(l=>`
       <tr>
         <td><div style="display:flex;align-items:center;gap:8px"><div class="avatar-sm" style="background:${avC(l.nome)}">${ini(l.nome)}</div><div><div class="lead-name">${l.nome}</div><div style="font-family:var(--mono);font-size:11px;color:var(--text3)">${l.email}</div></div></div></td>
         <td>${l.score!=null?`<div class="score-bar"><div class="score-track"><div class="score-fill" style="width:${l.score}%;background:${scBg(l.score)}"></div></div><span class="score-pill score-${sc(l.score)}">${l.score.toFixed(0)}</span></div>`:'<span style="color:var(--text3)">—</span>'}</td>
-        <td><span class="status-badge ${scCls(l.status)}">${l.status}</span></td>
+        <td><select class="filter-select" style="padding:3px 6px;font-size:11px;border-radius:5px" onchange="updateLeadStatus('${l.id}',this.value)">${statusOpts.map(s=>`<option value="${s}"${s===l.status?' selected':''}>${s}</option>`).join('')}</select></td>
         <td style="font-family:var(--mono);font-size:11px;color:var(--text3)">${l.origem}</td>
         <td style="font-family:var(--mono);font-size:11px;color:var(--text3)">${l.localizacao||'—'}</td>
         <td style="font-family:var(--mono);font-size:11px;color:var(--text3)">${new Date(l.created_at).toLocaleString('pt-BR')}</td>
-      </tr>`).join('') || '<tr><td colspan="6" style="color:var(--text3);padding:20px;text-align:center">Nenhum lead encontrado.</td></tr>';
+        <td><button class="btn btn-ghost" style="padding:3px 8px;font-size:10px" onclick="nav(null,'orquestrador');document.getElementById('orch-lead-id').value='${l.id}';loadOrchestration()">IA →</button></td>
+      </tr>`).join('') || '<tr><td colspan="7" style="color:var(--text3);padding:20px;text-align:center">Nenhum lead encontrado.</td></tr>';
   }catch(e){tbody.innerHTML='<tr><td colspan="6" style="color:var(--red);padding:20px;text-align:center">Erro ao carregar leads — verifique se o backend está rodando.</td></tr>';}
 }
 function filterLeads(){loadLeads();}
@@ -814,13 +832,14 @@ async function importSingle(i){
   const btn=document.getElementById('import-btn-'+i);
   if(btn){btn.disabled=true;btn.textContent='...';}
 
+  const campanhaId=document.getElementById('pesquisa-campanha')?.value||null;
   const payload={
     nome: p.displayName?.text||'Sem nome',
     origem: 'maps',
     whatsapp: p.nationalPhoneNumber||null,
     localizacao: p.formattedAddress||null,
     status: 'novo',
-    campanha_id: null,
+    campanha_id: campanhaId||null,
     email: null,
   };
 
@@ -866,9 +885,68 @@ async function importAll(){
   log(`Importação em lote concluída: ${importedIds.size} leads enviados`,'ok');
 }
 
+/* ====== CAMPANHA DROPDOWN (pesquisa) ====== */
+async function loadCampanhasDropdown(){
+  try{
+    const camps=await fetch(API_BASE+'/api/campanhas').then(r=>r.json());
+    const sel=document.getElementById('pesquisa-campanha');
+    sel.innerHTML='<option value="">Sem campanha</option>'+
+      camps.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  }catch(e){}
+}
+
+/* ====== STATUS UPDATE ====== */
+async function updateLeadStatus(leadId, newStatus){
+  try{
+    const resp=await fetch(API_BASE+'/leads/'+leadId+'/status',{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({status:newStatus}),
+    });
+    if(!resp.ok) throw new Error(await resp.text());
+    toast('Status atualizado: '+newStatus);
+    loadLeads();
+  }catch(e){toast('Erro ao atualizar status',true);}
+}
+
+/* ====== ORQUESTRADOR ====== */
+const OFFER_LABELS={crm_atendimento:'CRM / Atendimento',captacao_clientes:'Captação de Clientes',credito_expansao:'Crédito / Expansão',marketing_digital:'Marketing Digital',gestao_agenda:'Gestão de Agenda',fidelizacao:'Fidelização',outro:'Outro',nichochat:'NichoChat CRM',consorcio:'Consórcio',ambos:'Ambos',nenhuma:'Nenhuma'};
+
+async function loadOrchestration(){
+  const id=document.getElementById('orch-lead-id').value.trim();
+  if(!id){toast('Informe o UUID do lead',true);return;}
+  const box=document.getElementById('orch-result');
+  box.innerHTML='<div style="padding:20px;text-align:center"><span class="spinner"></span></div>';
+  try{
+    const resp=await fetch(API_BASE+'/api/leads/'+id+'/orchestration');
+    if(resp.status===404){box.innerHTML='<div class="empty-state" style="padding:32px"><div class="empty-icon">😶</div><div class="empty-title">Sem decisão IA</div><div class="empty-sub">Este lead ainda não passou pelo orquestrador ou não foi encontrado.</div></div>';return;}
+    if(!resp.ok) throw new Error(resp.status);
+    const d=await resp.json();
+    const offerLabel=OFFER_LABELS[d.offer]||d.offer||'—';
+    box.innerHTML=`
+      <div class="scores-row" style="margin-bottom:14px">
+        <div class="score-block"><div class="score-block-label">Score Final</div><div class="score-block-val" style="color:${d.final_score>=70?'var(--green)':d.final_score>=40?'var(--amber)':'var(--accent2)'}">${d.final_score!=null?d.final_score.toFixed(0):'—'}</div></div>
+        <div class="score-block"><div class="score-block-label">Ajuste IA</div><div class="score-block-val" style="color:${d.score_adjustment>=0?'var(--green)':'var(--red)'}">${d.score_adjustment>=0?'+':''}${d.score_adjustment.toFixed(0)}</div></div>
+      </div>
+      ${d.need_identified?`<div style="background:rgba(91,127,255,.07);border:1px solid rgba(91,127,255,.18);border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px;line-height:1.6"><span style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em">Necessidade identificada</span><div style="margin-top:4px;color:var(--text)">${d.need_identified}</div></div>`:''}
+      <div class="place-detail-section"><div class="place-detail-title">Decisão</div>
+        <div class="info-row"><span class="info-key">Oferta</span><span class="info-val">${offerLabel}</span></div>
+        <div class="info-row"><span class="info-key">Abordagem</span><span class="info-val">${d.approach||'—'}</span></div>
+        <div class="info-row"><span class="info-key">Tom</span><span class="info-val">${d.tone||'—'}</span></div>
+        <div class="info-row"><span class="info-key">Melhor horário</span><span class="info-val">${d.best_time||'—'}</span></div>
+        <div class="info-row"><span class="info-key">Modelo</span><span class="info-val" style="font-family:var(--mono);font-size:11px">${d.model_used}</span></div>
+      </div>
+      ${d.opening_message?`<div class="place-detail-section"><div class="place-detail-title">Mensagem de abertura</div><div style="font-size:13px;color:var(--text);line-height:1.7;white-space:pre-wrap">${d.opening_message}</div></div>`:''}
+      ${d.objections&&d.objections.length?`<div class="place-detail-section"><div class="place-detail-title">Objeções esperadas</div><div style="margin-top:4px">${d.objections.map(o=>`<span class="objection-tag">${o}</span>`).join('')}</div></div>`:''}
+      ${d.reasoning?`<div class="place-detail-section"><div class="place-detail-title">Raciocínio da IA</div><div style="font-size:12px;color:var(--text3);line-height:1.7">${d.reasoning}</div></div>`:''}
+      <div style="font-size:10px;color:var(--text3);font-family:var(--mono);text-align:right;margin-top:8px">Decisão gerada em ${new Date(d.decided_at).toLocaleString('pt-BR')}</div>`;
+  }catch(e){box.innerHTML='<div style="color:var(--red);padding:16px;font-size:12px">Erro ao consultar: '+e.message+'</div>';}
+}
+
 /* ====== INIT ====== */
 nav(document.querySelector('.nav-item'),'overview');
 loadOverview();
+loadCampanhasDropdown();
 </script>
 </body>
 </html>

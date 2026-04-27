@@ -6,25 +6,36 @@ CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
 -- ── Niches ────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS niches (
-    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name        VARCHAR(100)  NOT NULL UNIQUE,
-    slug        VARCHAR(100)  NOT NULL UNIQUE,
-    description TEXT,
-    is_active   BOOLEAN       NOT NULL DEFAULT TRUE,
-    created_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+    id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name                  VARCHAR(100)  NOT NULL UNIQUE,
+    slug                  VARCHAR(100)  NOT NULL UNIQUE,
+    description           TEXT,
+    niche_score_multiplier FLOAT        NOT NULL DEFAULT 0.5,
+    is_active             BOOLEAN       NOT NULL DEFAULT TRUE,
+    created_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_niches_slug ON niches (slug);
 
-INSERT INTO niches (id, name, slug, description) VALUES
-    (uuid_generate_v4(), 'Tecnologia',        'tecnologia',        'Empresas e profissionais de TI, SaaS, startups'),
-    (uuid_generate_v4(), 'Saúde e Bem-estar', 'saude-bem-estar',   'Clínicas, planos de saúde, suplementos'),
-    (uuid_generate_v4(), 'Educação',          'educacao',          'Cursos, faculdades, treinamentos corporativos'),
-    (uuid_generate_v4(), 'Imóveis',           'imoveis',           'Construtoras, imobiliárias, corretores'),
-    (uuid_generate_v4(), 'E-commerce',        'ecommerce',         'Lojas virtuais, marketplaces, dropshipping'),
-    (uuid_generate_v4(), 'Serviços Jurídicos','servicos-juridicos', 'Escritórios de advocacia, legaltech'),
-    (uuid_generate_v4(), 'Financeiro',        'financeiro',        'Fintechs, seguros, investimentos'),
-    (uuid_generate_v4(), 'Indústria',         'industria',         'Manufatura, automação industrial, B2B')
+-- Multipliers calibrados para o contexto de "empresários que querem vender mais"
+-- 1.0 = nicho com altíssima receptividade e ciclo de compra rápido
+-- 0.5 = nicho neutro (default para segmentos não mapeados)
+INSERT INTO niches (id, name, slug, description, niche_score_multiplier) VALUES
+    (uuid_generate_v4(), 'E-commerce',          'ecommerce',          'Lojas virtuais, marketplaces, dropshipping',        1.00),
+    (uuid_generate_v4(), 'Beleza e Estética',   'beleza-estetica',    'Salões, nail designers, barbearias, lash designers', 1.00),
+    (uuid_generate_v4(), 'Academia e Fitness',  'academia-fitness',   'Academias, personal trainers, estúdios fitness',    0.90),
+    (uuid_generate_v4(), 'Saúde e Bem-estar',   'saude-bem-estar',    'Clínicas, nutricionistas, psicólogos, spas',        0.90),
+    (uuid_generate_v4(), 'Imóveis',             'imoveis',            'Construtoras, imobiliárias, corretores',            0.85),
+    (uuid_generate_v4(), 'Financeiro',          'financeiro',         'Fintechs, seguros, investimentos, crédito',         0.85),
+    (uuid_generate_v4(), 'Alimentação',         'alimentacao',        'Restaurantes, cafés, delivery, food service',       0.85),
+    (uuid_generate_v4(), 'Pet Shop',            'pet-shop',           'Petshops, clínicas veterinárias, grooming',         0.85),
+    (uuid_generate_v4(), 'Moda e Vestuário',    'moda-vestuario',     'Boutiques, moda feminina, acessórios',              0.80),
+    (uuid_generate_v4(), 'Educação',            'educacao',           'Cursos, faculdades, treinamentos corporativos',     0.80),
+    (uuid_generate_v4(), 'Serviços Jurídicos',  'servicos-juridicos', 'Escritórios de advocacia, legaltech',               0.75),
+    (uuid_generate_v4(), 'Construção e Reformas','construcao-reformas','Construtoras, reformadores, decoração de interiores',0.75),
+    (uuid_generate_v4(), 'Tecnologia',          'tecnologia',         'Empresas e profissionais de TI, SaaS, startups',    0.70),
+    (uuid_generate_v4(), 'Contabilidade',       'contabilidade',      'Contadores, assessores fiscais, BPO financeiro',    0.70),
+    (uuid_generate_v4(), 'Indústria',           'industria',          'Manufatura, automação industrial, B2B',             0.60)
 ON CONFLICT (slug) DO NOTHING;
 
 -- ── Campanhas ─────────────────────────────────────────────────────────────────

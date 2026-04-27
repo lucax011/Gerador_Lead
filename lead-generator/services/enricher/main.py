@@ -26,13 +26,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from shared.broker.rabbitmq import RabbitMQConsumer, RabbitMQPublisher
 from shared.config import get_settings
-from shared.database.models import EnrichmentORM, LeadORM
+from shared.database.models import EnrichmentORM, LeadORM, NicheORM
 from shared.database.session import AsyncSessionLocal
 from shared.models.events import LeadEnrichedEvent
 from shared.models.lead import Lead, LeadStatus
 from services.enricher.sources.cnpjws import enrich_from_metadata, lookup_cnpj
 from services.enricher.sources.bigdatacorp import enrich_company
 from services.enricher.sources.serasa import get_credit_score
+from services.enricher.sources.niche_classifier import classify_niche
 
 settings = get_settings()
 
@@ -84,7 +85,22 @@ async def _enrich_cnpj(lead: Lead) -> dict | None:
     return None
 
 
-async def _persist_enrichment(lead: Lead, enrichment: dict, sources_used: list[str]) -> None:
+_niche_slug_cache: dict[str, str] = {}  # slug → UUID str
+
+
+async def _resolve_niche_id(slug: str) -> str | None:
+    if slug in _niche_slug_cache:
+        return _niche_slug_cache[slug]
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(NicheORM).where(NicheORM.slug == slug))
+        niche = result.scalar_one_or_none()
+        if niche:
+            _niche_slug_cache[slug] = str(niche.id)
+            return str(niche.id)
+    return None
+
+
+async def _persist_enrichment(lead: Lead, enrichment: dict, sources_used: list[str], niche_id: str | None = None) -> None:
     cnpj_data = enrichment.get("cnpj") or {}
     instagram_data = enrichment.get("instagram") or {}
 
@@ -119,8 +135,11 @@ async def _persist_enrichment(lead: Lead, enrichment: dict, sources_used: list[s
             )
             session.add(enr_orm)
 
+        update_values: dict = {"status": LeadStatus.ENRICHED}
+        if niche_id and not lead.niche_id:
+            update_values["niche_id"] = niche_id
         await session.execute(
-            update(LeadORM).where(LeadORM.id == lead.id).values(status=LeadStatus.ENRICHED)
+            update(LeadORM).where(LeadORM.id == lead.id).values(**update_values)
         )
         await session.commit()
 
@@ -166,7 +185,28 @@ async def handle_lead_deduplicated(payload: dict[str, Any]) -> None:
     if not sources_used:
         log.info("Sem dados de enriquecimento disponíveis — seguindo sem enriquecer", lead_id=str(lead.id))
 
-    await _persist_enrichment(lead, enrichment, sources_used)
+    # Classificação de nicho — só faz quando o lead ainda não tem nicho atribuído
+    niche_id: str | None = None
+    if not lead.niche_id:
+        cnpj_data = enrichment.get("cnpj") or {}
+        ig_data = enrichment.get("instagram") or {}
+        niche_slug = classify_niche(
+            atividade=cnpj_data.get("atividade_principal"),
+            company=lead.company or cnpj_data.get("razao_social"),
+            bio=ig_data.get("bio") or lead.instagram_bio,
+            source_name=lead.source_name,
+        )
+        if niche_slug:
+            niche_id = await _resolve_niche_id(niche_slug)
+            if niche_id:
+                log.info("Nicho classificado", lead_id=str(lead.id), slug=niche_slug)
+            else:
+                log.warning("Slug classificado mas não encontrado no banco", slug=niche_slug)
+
+        # Passa o slug no enrichment para o orchestrator usar no contexto
+        enrichment["niche_slug"] = niche_slug
+
+    await _persist_enrichment(lead, enrichment, sources_used, niche_id=niche_id)
 
     # Propaga enrichment no payload para o Scorer usar
     event = LeadEnrichedEvent(

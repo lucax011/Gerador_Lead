@@ -10,7 +10,22 @@
       "Bash(docker exec *)",
       "Bash(docker build *)",
       "Bash(docker run *)",
-      "Bash(py -m pip install pydantic pydantic-settings email-validator)"
+      "Bash(py -m pip install pydantic pydantic-settings email-validator)",
+      "PowerShell(icacls \"d:\\\\Projects\\\\Gerador_Lead\\\\lead-generator\" /grant \"lukin:\\(OI\\)\\(CI\\)F\" /T 2>&1)",
+      "PowerShell(head -5)",
+      "PowerShell(py -m pip install pytest pytest-asyncio 2>&1)",
+      "WebFetch(domain:br.hubspot.com)",
+      "WebFetch(domain:leadmark.com.br)",
+      "WebFetch(domain:www.publicidademarketing.com.br)",
+      "WebFetch(domain:leadster.com.br)",
+      "WebFetch(domain:mailchimp.com)",
+      "WebFetch(domain:www.pipedrive.com)",
+      "WebFetch(domain:www.rdstation.com)",
+      "Bash(py -m pytest tests/ -q)",
+      "Bash(py -m pytest tests/enricher/test_niche_classifier.py -v)"
+    ],
+    "additionalDirectories": [
+      "d:\\Projects\\Gerador_Lead\\lead-generator\\tests"
     ]
   }
 }

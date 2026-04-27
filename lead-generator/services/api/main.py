@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from shared.broker.rabbitmq import RabbitMQPublisher
 from shared.config import get_settings
-from shared.database.models import CampaignORM, LeadORM, ScoreORM, SourceORM
+from shared.database.models import CampaignORM, LeadORM, OrchestrationORM, ScoreORM, SourceORM
 from shared.models.events import LeadCapturedEvent
 from shared.models.lead import Lead, LeadStatus
 
@@ -259,6 +259,67 @@ async def pipeline():
             counts[frontend] = counts.get(frontend, 0) + count
 
     return counts
+
+
+class LeadStatusUpdate(BaseModel):
+    status: str
+
+
+@app.patch("/leads/{lead_id}/status", status_code=200)
+async def update_lead_status(lead_id: str, body: LeadStatusUpdate):
+    new_status = FRONTEND_TO_BACKEND_STATUS.get(body.status)
+    if not new_status:
+        raise HTTPException(status_code=422, detail=f"Status inválido: {body.status}")
+    try:
+        lid = UUID(lead_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="lead_id inválido")
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(LeadORM).where(LeadORM.id == lid))
+        lead = result.scalar_one_or_none()
+        if not lead:
+            raise HTTPException(status_code=404, detail="Lead não encontrado")
+        lead.status = new_status.value
+        await session.commit()
+
+    return {"id": lead_id, "status": body.status}
+
+
+@app.get("/api/leads/{lead_id}/orchestration")
+async def get_orchestration(lead_id: str):
+    try:
+        lid = UUID(lead_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="lead_id inválido")
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(OrchestrationORM)
+            .where(OrchestrationORM.lead_id == lid)
+            .order_by(OrchestrationORM.decided_at.desc())
+            .limit(1)
+        )
+        orch = result.scalar_one_or_none()
+
+    if not orch:
+        raise HTTPException(status_code=404, detail="Sem decisão IA para este lead")
+
+    return {
+        "need_identified": orch.need_identified,
+        "offer": orch.offer,
+        "approach": orch.approach,
+        "tone": orch.tone,
+        "best_time": orch.best_time,
+        "best_time_reason": orch.best_time_reason,
+        "score_adjustment": orch.score_adjustment,
+        "final_score": orch.final_score,
+        "objections": orch.objections,
+        "opening_message": orch.opening_message,
+        "reasoning": orch.reasoning,
+        "model_used": orch.model_used,
+        "decided_at": orch.decided_at.isoformat(),
+    }
 
 
 @app.get("/api/campanhas")

@@ -1,12 +1,16 @@
 """Orchestrator Worker — Cérebro do Motor de Audiência
 
 Consome lead.scored, chama GPT-4o-mini com o perfil completo e decide:
-  - Qual oferta se encaixa (nichochat | consorcio | nenhuma)
+  - Qual necessidade o empresário tem para vender mais (need_identified)
+  - Categoria de oferta ideal (offer_category)
   - Qual canal de abordagem (whatsapp | instagram_dm | nurture | none)
   - Tom da mensagem (direto | educativo | prova_social | urgencia)
   - Melhor horário de contato
   - Objeções esperadas baseadas no perfil
   - Mensagem de abertura personalizada
+
+Produto-agnóstico: a IA decide o que é melhor para cada lead/nicho,
+sem restrição a produtos específicos.
 
 Se OPENAI_API_KEY não estiver configurado, passa o lead adiante com decisão padrão
 baseada no score (regras determinísticas — não bloqueia o pipeline).
@@ -42,32 +46,53 @@ log = structlog.get_logger(__name__)
 
 publisher: RabbitMQPublisher
 
-ORCHESTRATION_PROMPT = """Você é o orquestrador de um sistema de prospecção B2B para pequenos negócios brasileiros (nail designers, barbearias, salões de beleza, lash designers e outros profissionais autônomos).
+NICHE_CONTEXTS: dict[str, str] = {
+    "ecommerce":          "E-commerce: precisa de mais tráfego e conversão. Foco em automação de carrinho abandonado, retargeting e atendimento rápido via WhatsApp.",
+    "beleza-estetica":    "Beleza/Estética: nail designers, salões, barbearias, lash. Alta presença no Instagram, WhatsApp como canal principal. Precisam de agenda cheia e fidelização de clientes recorrentes.",
+    "saude-bem-estar":    "Saúde/Bem-estar: clínicas, nutricionistas, psicólogos, academias de yoga. Precisam de pacientes recorrentes e agenda otimizada. Prova social e depoimentos são muito eficazes.",
+    "academia-fitness":   "Academia/Fitness: personal trainers, estúdios, boxes de CrossFit. Precisam captar alunos mensalistas e reter matriculados. Sazonalidade: janeiro e pós-Carnaval são picos.",
+    "alimentacao":        "Alimentação/Gastronomia: restaurantes, cafés, delivery. Precisam de movimento constante e fidelização. Ticket médio baixo, alto volume. WhatsApp para delivery funciona muito bem.",
+    "pet-shop":           "Pet Shop/Veterinária: petshops, clínicas vet, grooming. Dono de pet é cliente fiel quando há confiança. Precisam de agendamento fácil e comunicação proativa.",
+    "servicos-juridicos": "Jurídico: advogados, escritórios. Abordagem educativa e de autoridade. Ciclo longo, mas ticket alto. Geração de leads via conteúdo e indicação.",
+    "financeiro":         "Financeiro/Fintech: seguros, investimentos, fintechs. Tom profissional e objetivo. Conformidade é objeção comum. CNPJ ativo e renda documentada são qualificadores.",
+    "imoveis":            "Imóveis: corretores, imobiliárias, construtoras. Alta comissão tolera alto custo de prospecção. Precisam de leads qualificados de compradores/locatários. WhatsApp é padrão do setor.",
+    "educacao":           "Educação: cursos, faculdades, treinamentos. Ciclos de matrícula com picos sazonais. Urgência por vagas + desconto funcionam. Prova social com depoimentos de alunos.",
+    "moda-vestuario":     "Moda/Vestuário: boutiques, moda feminina, acessórios. Instagram é canal de vitrine. Precisam de clientes recorrentes e lançamentos. Engajamento alto = boa conversão.",
+    "tecnologia":         "Tecnologia/SaaS: empresas de TI, startups. Ciclo de venda longo, múltiplos decisores. Foco em ROI, cases e demos. LinkedIn > Instagram para B2B tech.",
+    "construcao-reformas":"Construção/Reformas: construtoras, reformadores, decoradores. Ticket alto, ciclo longo. Indicação e portfólio visual são os principais gatilhos. WhatsApp para orçamentos.",
+    "contabilidade":      "Contabilidade/Assessoria: contadores, BPO financeiro. Precisam de MEIs e PMEs como clientes. Dor principal: simplificar obrigações fiscais. Abordagem educativa funciona.",
+    "industria":          "Indústria/B2B: manufatura, automação, fornecedores. Ciclo longo, decisão em comitê. Confiança e relacionamento acima de tudo. Feiras e LinkedIn são canais naturais.",
+}
 
-Analise o perfil do lead abaixo e tome as decisões de abordagem. Responda EXCLUSIVAMENTE em JSON válido, sem markdown, sem explicações fora do JSON.
+ORCHESTRATION_PROMPT = """Você é um orquestrador de prospecção B2B que analisa perfis de donos de pequenas e médias empresas brasileiras e decide a melhor forma de abordagem comercial.
+
+OBJETIVO: Identificar empresários que querem VENDER MAIS e recomendar a melhor solução e abordagem para eles. Você não está preso a produtos específicos — avalie o que faz mais sentido para o perfil do lead (automação de atendimento, captação de clientes, crédito para expansão, presença digital, gestão de agenda, fidelização, etc.).
+
+Analise o perfil abaixo e responda EXCLUSIVAMENTE em JSON válido, sem markdown.
 
 Perfil do lead:
 {profile}
 
-Produtos disponíveis:
-- nichochat: plataforma de CRM + chatbot WhatsApp para gestão de clientes do nicho. Ticket ~R$197/mês. Foco: profissionais com 500+ seguidores, presença no Instagram, WhatsApp ativo com clientes.
-- consorcio: consórcio de imóvel ou veículo. Ticket ~R$800/mês. Foco: empresários com CNPJ ativo, renda B+ (R$8k+/mês), buscando crescimento/investimento.
+Contexto do nicho:
+{niche_context}
 
 Responda com este JSON exato:
 {{
-  "offer": "nichochat" | "consorcio" | "ambos" | "nenhuma",
+  "need_identified": "necessidade principal identificada em 1 frase (ex: 'captação de novos clientes via Instagram', 'automação do atendimento WhatsApp', 'crédito para abrir segunda unidade')",
+  "offer_category": "crm_atendimento | captacao_clientes | credito_expansao | marketing_digital | gestao_agenda | fidelizacao | outro",
   "approach": "whatsapp" | "instagram_dm" | "nurture" | "none",
   "tone": "direto" | "educativo" | "prova_social" | "urgencia",
   "best_time": "HH:mm–HH:mm",
   "best_time_reason": "motivo em 1 frase",
   "score_adjustment": número entre -10 e +10,
   "objections": ["objeção 1", "objeção 2"],
-  "opening_message": "mensagem de abertura personalizada com dado do perfil (máx 3 linhas)",
+  "opening_message": "mensagem de abertura personalizada com dado real do perfil, máx 3 linhas, sem pitch genérico",
   "reasoning": "justificativa da decisão em 2-3 frases em português"
 }}"""
 
 
-def _build_profile_text(lead: Lead, score: float, temperature: str, enrichment: dict) -> str:
+def _build_profile_text(lead: Lead, score: float, temperature: str, enrichment: dict, niche_name: str | None = None) -> tuple[str, str]:
+    """Returns (profile_text, niche_context)."""
     ig = enrichment.get("instagram") or {}
     cnpj = enrichment.get("cnpj") or {}
 
@@ -76,11 +101,15 @@ def _build_profile_text(lead: Lead, score: float, temperature: str, enrichment: 
     account_type = ig.get("account_type") or lead.instagram_account_type or "desconhecido"
     bio = ig.get("bio") or lead.instagram_bio or ""
 
+    niche_slug = enrichment.get("niche_slug") or ""
+    niche_context = NICHE_CONTEXTS.get(niche_slug, "Nicho não mapeado — avalie o perfil e decida com base nos dados disponíveis.")
+
     lines = [
         f"Nome: {lead.name}",
         f"Email: {lead.email}",
         f"Telefone: {lead.phone or 'não informado'}",
         f"Empresa: {lead.company or 'não informado'}",
+        f"Nicho: {niche_name or 'não classificado'}",
         f"Fonte: {lead.source_name}",
         f"Score base: {score:.1f} ({temperature})",
         "",
@@ -100,7 +129,7 @@ def _build_profile_text(lead: Lead, score: float, temperature: str, enrichment: 
         f"Situação: {cnpj.get('situacao', 'desconhecida')}",
         f"Município: {cnpj.get('municipio', '')} {cnpj.get('uf', '')}",
     ]
-    return "\n".join(lines)
+    return "\n".join(lines), niche_context
 
 
 def _fallback_decision(score: float, temperature: str, lead: Lead) -> dict:
@@ -109,9 +138,18 @@ def _fallback_decision(score: float, temperature: str, lead: Lead) -> dict:
     has_phone = bool(lead.phone)
     followers = lead.instagram_followers or 0
 
-    offer = "nenhuma"
-    if temperature in ("HOT", "WARM"):
-        offer = "nichochat" if has_instagram else "consorcio"
+    if temperature == "COLD":
+        need = "reengajamento futuro"
+        offer_category = "outro"
+    elif has_instagram and followers >= 500:
+        need = "captação de clientes via Instagram e automação de atendimento"
+        offer_category = "crm_atendimento"
+    elif has_phone:
+        need = "captação de novos clientes via abordagem direta"
+        offer_category = "captacao_clientes"
+    else:
+        need = "presença digital e captação de leads qualificados"
+        offer_category = "marketing_digital"
 
     approach = "none"
     if temperature == "HOT":
@@ -119,24 +157,26 @@ def _fallback_decision(score: float, temperature: str, lead: Lead) -> dict:
     elif temperature == "WARM":
         approach = "instagram_dm" if has_instagram else "nurture"
 
+    first_name = lead.name.split()[0]
     return {
-        "offer": offer,
+        "need_identified": need,
+        "offer_category": offer_category,
         "approach": approach,
         "tone": "direto" if temperature == "HOT" else "educativo",
         "best_time": "19h–21h",
         "best_time_reason": "horário padrão para abordagem de profissionais autônomos",
         "score_adjustment": 0.0,
         "objections": ["Preço alto"] if temperature == "WARM" else [],
-        "opening_message": f"Oi {lead.name.split()[0]}, vi o seu perfil e achei que poderia te ajudar!",
+        "opening_message": f"Oi {first_name}, vi o seu perfil e queria entender melhor como você está captando clientes hoje.",
         "reasoning": "Decisão determinística — OpenAI não configurado. Defina OPENAI_API_KEY para ativar o orquestrador IA.",
         "model_used": "fallback",
     }
 
 
-async def _call_openai(profile_text: str) -> dict | None:
+async def _call_openai(profile_text: str, niche_context: str) -> dict | None:
     try:
         import httpx
-        prompt = ORCHESTRATION_PROMPT.format(profile=profile_text)
+        prompt = ORCHESTRATION_PROMPT.format(profile=profile_text, niche_context=niche_context)
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
                 "https://api.openai.com/v1/chat/completions",
@@ -169,7 +209,8 @@ async def _persist_decision(lead: Lead, decision: dict, final_score: float) -> N
         orch = OrchestrationORM(
             id=uuid4(),
             lead_id=lead.id,
-            offer=decision.get("offer"),
+            need_identified=decision.get("need_identified"),
+            offer=decision.get("offer_category") or decision.get("offer"),
             approach=decision.get("approach"),
             tone=decision.get("tone"),
             best_time=decision.get("best_time"),
@@ -196,6 +237,7 @@ async def handle_lead_scored(payload: dict[str, Any]) -> None:
     score = payload["score"]
     temperature = payload["temperature"]
     enrichment = payload.get("enrichment", {})
+    niche_name = payload.get("niche_name")
 
     log.info("Orchestrating lead", lead_id=str(lead.id), score=score, temperature=temperature)
 
@@ -203,8 +245,8 @@ async def handle_lead_scored(payload: dict[str, Any]) -> None:
         log.info("Orchestrator desativado — passando adiante sem decisão IA")
         decision = _fallback_decision(score, temperature, lead)
     elif settings.openai_api_key:
-        profile_text = _build_profile_text(lead, score, temperature, enrichment)
-        ai_decision = await _call_openai(profile_text)
+        profile_text, niche_context = _build_profile_text(lead, score, temperature, enrichment, niche_name)
+        ai_decision = await _call_openai(profile_text, niche_context)
         decision = ai_decision or _fallback_decision(score, temperature, lead)
     else:
         log.warning("OPENAI_API_KEY não configurado — usando decisão determinística")
@@ -219,7 +261,7 @@ async def handle_lead_scored(payload: dict[str, Any]) -> None:
         lead=lead,
         score=score,
         temperature=temperature,
-        offer=decision.get("offer"),
+        offer=decision.get("offer_category") or decision.get("offer"),
         approach=decision.get("approach"),
         tone=decision.get("tone"),
         best_time=decision.get("best_time"),

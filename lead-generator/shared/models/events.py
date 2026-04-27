@@ -40,6 +40,7 @@ class LeadScoredEvent(BaseEvent):
     temperature: str  # HOT | WARM | COLD
     score_breakdown: dict[str, float] = Field(default_factory=dict)
     enrichment: dict[str, Any] = Field(default_factory=dict)
+    niche_name: str | None = None  # nome legível do nicho para o orchestrator
 
 
 class LeadOrchestratedEvent(BaseEvent):

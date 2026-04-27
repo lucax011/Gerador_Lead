@@ -4,10 +4,16 @@ import re
 import httpx
 import structlog
 
+from shared.config import get_settings
+
 log = structlog.get_logger(__name__)
 
 _BASE = "https://publica.cnpj.ws/cnpj"
-_HEADERS = {"User-Agent": "LeadGenerator/1.0 (contato@exemplo.com.br)"}
+
+
+def _headers() -> dict:
+    email = get_settings().support_email
+    return {"User-Agent": f"LeadGenerator/1.0 ({email})"}
 
 
 def _extract_cnpj(text: str) -> str | None:
@@ -55,7 +61,7 @@ async def lookup_cnpj(cnpj_raw: str) -> dict | None:
     url = f"{_BASE}/{cnpj}"
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(url, headers=_HEADERS)
+            resp = await client.get(url, headers=_headers())
             if resp.status_code == 429:
                 log.warning("CNPJ.ws rate limit atingido", cnpj=cnpj)
                 return None
