@@ -87,6 +87,9 @@ class LeadORM(Base):
     niche: Mapped["NicheORM | None"] = relationship("NicheORM", back_populates="leads")
     source_rel: Mapped["SourceORM"] = relationship("SourceORM", back_populates="leads")
     scores: Mapped[list["ScoreORM"]] = relationship("ScoreORM", back_populates="lead", cascade="all, delete-orphan")
+    enrichment: Mapped["EnrichmentORM | None"] = relationship("EnrichmentORM", back_populates="lead", uselist=False, cascade="all, delete-orphan")
+    orchestrations: Mapped[list["OrchestrationORM"]] = relationship("OrchestrationORM", back_populates="lead", cascade="all, delete-orphan")
+    outreach_attempts: Mapped[list["OutreachAttemptORM"]] = relationship("OutreachAttemptORM", back_populates="lead", cascade="all, delete-orphan")
 
 
 class ScoreORM(Base):
@@ -101,3 +104,69 @@ class ScoreORM(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     lead: Mapped["LeadORM"] = relationship("LeadORM", back_populates="scores")
+
+
+class EnrichmentORM(Base):
+    __tablename__ = "enrichments"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
+    lead_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("leads.id", ondelete="CASCADE"), nullable=False, index=True, unique=True
+    )
+    cnpj_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    instagram_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    bigdatacorp_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    serasa_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    facebook_capi_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    has_cnpj: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    estimated_revenue_tier: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    years_in_business: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sources_used: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    enriched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+
+    lead: Mapped["LeadORM"] = relationship("LeadORM", back_populates="enrichment")
+
+
+class OrchestrationORM(Base):
+    __tablename__ = "orchestration_decisions"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
+    lead_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("leads.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    offer: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    approach: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    tone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    best_time: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    best_time_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    score_adjustment: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    final_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    objections: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    opening_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
+    model_used: Mapped[str] = mapped_column(String(50), nullable=False, default="gpt-4o-mini")
+    prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+
+    lead: Mapped["LeadORM"] = relationship("LeadORM", back_populates="orchestrations")
+
+
+class OutreachAttemptORM(Base):
+    __tablename__ = "outreach_attempts"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
+    lead_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("leads.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    channel: Mapped[str] = mapped_column(String(30), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="scheduled")
+    message_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+
+    lead: Mapped["LeadORM"] = relationship("LeadORM", back_populates="outreach_attempts")

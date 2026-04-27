@@ -8,32 +8,51 @@ exclusivamente via RabbitMQ. O objetivo final é receber leads de múltiplas fon
 qualificá-los automaticamente por score e entregar os mais quentes para o time comercial
 via Telegram em tempo real.
 
+A **API REST** (`services/api/`) serve como ponto de entrada manual e dashboard web,
+expondo o Motor de Audiência — interface para busca via Google Places API, importação
+de leads e visualização do pipeline.
+
 ---
 
 ## Arquitetura do Pipeline
 
 ```
-                        ┌──────────────────────────────────────────────────┐
-                        │                  PIPELINE                        │
-                        │                                                  │
-  Fontes de dados  ──►  │ Scraper ──► Validator ──► Deduplicator           │
-  (web, CSV, ads)       │                               │                  │
-                        │                            Scorer                │
-                        │                               │                  │
-                        │                          Distributor ──► Telegram│
-                        │                               │                  │
-                        │                           Dead-Letter            │
-                        └──────────────────────────────────────────────────┘
+  Dashboard Web (Motor de Audiência)
+  http://localhost:8000
+         │
+         │  POST /leads   GET /leads   GET /api/*
+         ▼
+  ┌──────────────────────────────────────────────────────────┐
+  │  API FastAPI  (services/api/)                            │
+  │  · CORS habilitado                                       │
+  │  · Serve static/index.html (Motor de Audiência)          │
+  │  · Publica lead.captured → RabbitMQ                      │
+  └──────────────────┬───────────────────────────────────────┘
+                     │ lead.captured
+                     ▼
+  ┌──────────────────────────────────────────────────────────┐
+  │                  PIPELINE                                │
+  │                                                          │
+  │  Scraper ──► Validator ──► Deduplicator                  │
+  │  (web, CSV,                     │                        │
+  │   Google Maps,              Scorer                       │
+  │   Instagram/Apify)              │                        │
+  │                            Distributor ──► Telegram      │
+  │                                 │                        │
+  │                             Dead-Letter                  │
+  └──────────────────────────────────────────────────────────┘
 ```
 
 ### Fluxo de eventos (routing keys RabbitMQ)
 
 | # | Evento | Publicado por | Consumido por | Descrição |
 |---|--------|--------------|---------------|-----------|
-| 1 | `lead.captured` | Scraper | Validator | Lead bruto recebido da fonte |
+| 1 | `lead.captured` | Scraper / API | Validator | Lead bruto recebido da fonte |
 | 2 | `lead.validated` | Validator | Deduplicator | Lead passou nas regras de negócio |
-| 3 | `lead.deduplicated` | Deduplicator | Scorer | Lead é novo ou foi mergeado |
-| 4 | `lead.scored` | Scorer | Distributor | Lead pontuado com temperatura |
+| 3 | `lead.deduplicated` | Deduplicator | **Enricher** | Lead é novo ou foi mergeado |
+| 4 | `lead.enriched` | **Enricher** | Scorer | Perfil enriquecido com CNPJ, Instagram, etc |
+| 5 | `lead.scored` | Scorer | **Orchestrator** + Distributor | Score base calculado |
+| 6 | `lead.orchestrated` | **Orchestrator** | **Outreach** | Decisão IA: oferta, canal, tom, horário |
 | — | `lead.rejected` | Validator | Dead-letter | Lead inválido descartado |
 | — | `lead.dlx` | Distributor | Dead-letter | Falha de entrega após retries |
 
@@ -151,6 +170,45 @@ captured → validated → deduplicated → [enriched →] scored → distribute
 
 ## Serviços
 
+### Enricher
+- Consome `lead.deduplicated`, enriquece o perfil e publica `lead.enriched`
+- **CNPJ.ws** (gratuito, sem token): lookup por CNPJ extraído do `metadata["cnpj"]` do lead; retorna razão social, atividade, porte, tempo de empresa, município
+- **Instagram**: re-usa dados já presentes no modelo Lead (coletados pelo Apify) — sem nova chamada de API
+- **BigDataCorp** (stub, requer `BIGDATACORP_TOKEN`): renda estimada, CPF, perfil de consumo, empresas vinculadas
+- **Serasa Experian** (stub, requer `SERASA_CLIENT_ID` + `SERASA_CLIENT_SECRET`): score de crédito 0-1000, prioritário para leads de consórcio
+- **Facebook CAPI** (planejado Fase 4): comportamento de usuários que interagiram com campanhas
+- Persiste resultado em tabela `enrichments` (1:1 com leads)
+
+### Orchestrator IA
+- Consome `lead.scored` (com payload de enriquecimento), chama GPT-4o-mini e publica `lead.orchestrated`
+- Prompt em português, resposta JSON estruturada: offer, approach, tone, best_time, objections, opening_message, score_adjustment, reasoning
+- Decisão de **oferta**: `nichochat` (profissionais com Instagram ativo) | `consorcio` (empresários CNPJ, renda B+) | `ambos` | `nenhuma`
+- Decisão de **canal**: `whatsapp` | `instagram_dm` | `nurture` | `none`
+- **Fallback determinístico**: se `OPENAI_API_KEY` não configurado, usa regras baseadas em score e temperatura — pipeline não bloqueia
+- Persiste em tabela `orchestration_decisions` com tokens usados (para controle de custo)
+- Ativar/desativar via `ORCHESTRATOR_ENABLED=true/false`
+
+### Outreach
+- Consome `lead.orchestrated` e executa o contato no canal definido
+- **WhatsApp via Evolution API**: ativo quando `EVOLUTION_API_URL` + `EVOLUTION_API_KEY` + `EVOLUTION_INSTANCE` configurados; envia mensagem personalizada com delay de digitação simulado
+- **Instagram DM**: stub — registra tentativa como `pending_manual` para envio manual pelo operador (automação viola ToS do Instagram)
+- **Nurture**: agenda follow-up (stub — implementar em Fase 3 com scheduler)
+- Registra todas as tentativas em `outreach_attempts` com status: `scheduled | sent | delivered | read | failed | pending_manual | skipped`
+- Ao enviar com sucesso → atualiza status do lead para `contacted`
+- Ativar via `OUTREACH_ENABLED=true` no `.env`
+
+### API (Motor de Audiência)
+- FastAPI servindo dashboard web em `GET /` → `services/api/static/index.html`
+- `POST /leads` — aceita payload do frontend (nome, origem, whatsapp, localizacao, campanha_id, email), mapeia `origem` → source name, gera email placeholder se nulo, publica `lead.captured`
+- `GET /leads` — lista leads reais do banco com mapeamento de status backend → frontend vocabulary
+- `GET /api/overview` — métricas: total, convertidos, score médio, taxa de conversão
+- `GET /api/pipeline` — contagem por status para o kanban
+- `GET /api/campanhas` — campanhas ativas do banco
+- Mapeamento de origens: `maps→google_maps`, `instagram→instagram`, `csv→csv_import`, `whatsapp→whatsapp`, `meta→meta_ads`
+- Auto-seed de source: cria no banco em runtime se não existir (evita nova migration)
+- CORS `allow_origins=["*"]` — habilitado para desenvolvimento
+- Porta: **8000**
+
 ### Scraper
 - Ciclo periódico configurável via `SCRAPER_INTERVAL_SECONDS`
 - Resolve `source_id` no banco antes de publicar (falha graciosamente se fonte não cadastrada)
@@ -211,6 +269,7 @@ Alterar no banco tem efeito imediato (cache do scorer é por processo).
 | `chatbot` | Chatbot | direct | 0.7 | 17.5 pts |
 | `csv_import` | Importação CSV | manual | 0.6 | 15 pts |
 | `web_scraping` | Web Scraping | organic | 0.4 | 10 pts |
+| `google_maps` | Google Maps | manual | 0.9 | 22.5 pts |
 
 ---
 
@@ -325,6 +384,18 @@ Ver [.env.example](.env.example) para lista completa.
 | `SCRAPER_INTERVAL_SECONDS` | Intervalo entre ciclos do scraper (padrão: 300s) |
 | `APIFY_TOKEN` | Token da API Apify (ativa coleta de Instagram quando definido) |
 | `INSTAGRAM_USERNAMES` | Perfis públicos do Instagram separados por vírgula |
+| `CNPJWS_ENABLED` | Habilita lookup CNPJ.ws no enricher (padrão: true, gratuito) |
+| `BIGDATACORP_TOKEN` | Token BigDataCorp (ativa enriquecimento pago de pessoa física/jurídica) |
+| `SERASA_CLIENT_ID` | Credencial Serasa Experian (ativa score de crédito, prioritário consórcio) |
+| `SERASA_CLIENT_SECRET` | Credencial Serasa Experian |
+| `OPENAI_API_KEY` | Ativa orquestrador GPT-4o-mini (sem key → decisão determinística) |
+| `OPENAI_MODEL` | Modelo OpenAI (padrão: gpt-4o-mini) |
+| `ORCHESTRATOR_ENABLED` | Liga/desliga o orquestrador IA (padrão: true) |
+| `EVOLUTION_API_URL` | URL da Evolution API self-hosted (ex: http://evolution:8080) |
+| `EVOLUTION_API_KEY` | API key da Evolution API |
+| `EVOLUTION_INSTANCE` | Nome da instância WhatsApp conectada na Evolution API |
+| `OUTREACH_ENABLED` | Habilita envio real de WhatsApp (padrão: false — segurança) |
+| `OUTREACH_DELAY_SECONDS` | Delay entre envios em lote (padrão: 5s) |
 | `HOT_SCORE_THRESHOLD` | Score mínimo para HOT (padrão: 70) |
 | `WARM_SCORE_THRESHOLD` | Score mínimo para WARM (padrão: 40) |
 | `SCORE_WEIGHT_DATA_COMPLETENESS` | Peso completude (padrão: 40) |
@@ -343,18 +414,26 @@ O que existe hoje é suficiente para processar leads reais — falta apenas cone
 de dados reais e validar os pesos de score com dados concretos.
 
 ```
-✅ Pipeline completo (scraper → validator → deduplicator → scorer → distributor)
+✅ Pipeline completo (scraper → validator → deduplicator → enricher → scorer → orchestrator → outreach → distributor)
 ✅ Entrega via Telegram com retry
 ✅ Deduplicação com merge de dados
-✅ Score configurável com temperatura HOT/WARM/COLD
+✅ Score configurável com temperatura HOT/WARM/COLD + bônus de enriquecimento
 ✅ Source como entidade com multiplier no banco
 ✅ Dead-letter queue para falhas
 ✅ pgAdmin para visualização do banco
-✅ Infraestrutura Docker Compose completa
+✅ Infraestrutura Docker Compose completa (9 serviços)
 ✅ Entidade campanhas com FK em leads
 ✅ Ciclo de vida estendido do lead (contacted → replied → converted/churned)
 ✅ Campos de perfil Instagram no modelo de dados
-✅ ApifyInstagramSource — coleta pública, ativa via env, pronta para produção
+✅ ApifyInstagramSource — coleta pública, ativa via env
+✅ API REST FastAPI (services/api/) — POST /leads, GET /leads, métricas, pipeline
+✅ Motor de Audiência — dashboard web, Google Places API, importação de leads
+✅ Source google_maps seedada (multiplier 0.9)
+✅ Enricher — CNPJ.ws funcional + BigDataCorp/Serasa stubs prontos para ativar
+✅ Orchestrator IA — GPT-4o-mini com fallback determinístico (pipeline não bloqueia)
+✅ Outreach — Evolution API WhatsApp funcional + Instagram DM stub (manual)
+✅ Tabelas enrichments, orchestration_decisions, outreach_attempts no banco
+✅ Migration c3d4e5f6a7b8 com todas as novas tabelas
 ```
 
 ---
@@ -446,9 +525,13 @@ Objetivo: qualificação contextual usando dados de mercado e histórico de conv
 
 | Item | Impacto | Quando resolver |
 |------|---------|-----------------|
-| Cache de `source_multiplier` por processo | Alteração no banco não reflete sem restart do scorer | Fase 3 — TTL de cache ou invalidação via evento |
-| Sem testes automatizados | Regressions não detectadas antes do deploy | Fase 2 — testes unitários no scorer e validator |
-| `campanha_id` não é populado automaticamente | Leads chegam sem vínculo de campanha | Fase 2 — passar `campanha_id` na origem (webhook/CSV) |
-| Scoring não usa campos Instagram | Perfis com muitos seguidores não são bonificados | Fase 3 — adicionar critério `instagram_reach` no scorer |
-| Status `contacted`/`replied`/`converted` não são atualizados | Ciclo de vida para no `distributed` | Fase 3 — endpoint ou worker de atualização de status pós-distribuição |
-| `instagram.invalid` como email fallback | Leads sem email público no Instagram criam email fictício | Fase 2 — filtrar esses leads ou marcar como `email_required=false` |
+| Cache de `source_multiplier` por processo | Alteração no banco não reflete sem restart do scorer | Fase 3 |
+| Sem testes automatizados | Regressions não detectadas antes do deploy | Fase 2 |
+| `campanha_id` não populado no import via Maps | KPIs por campanha ficam zerados | Fase 2 — ligar dropdown de campanha ao importSingle() |
+| Status pós-distribuição não atualizados via UI | Ciclo de vida para no `distributed` | Fase 2 — PATCH /leads/{id}/status na API |
+| Instagram DM automatizado não disponível | Approach "instagram_dm" fica como envio manual | Fase 3 — avaliar Facebook Graph API com permissão |
+| BigDataCorp/Serasa como stubs | Enriquecimento de pessoa física não funcional | Fase 2 — ativar com contrato |
+| Orchestrator custo OpenAI não controlado | Sem limite de gasto por dia/campanha | Fase 3 — budget por campanha no config |
+| CORS `allow_origins=["*"]` | Inseguro para produção | Fase 2 — restringir para domínio real |
+| API key Google Places exposta no HTML | Key visível no código fonte | Fase 2 — proxy GET /api/search no backend |
+| Outreach sem follow-up sequencial | Apenas 1 tentativa de contato, sem sequência 3-5 touchpoints | Fase 3 — scheduler com delays inteligentes |

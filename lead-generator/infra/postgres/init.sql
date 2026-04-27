@@ -63,7 +63,8 @@ INSERT INTO sources (id, name, label, channel, base_score_multiplier) VALUES
     (uuid_generate_v4(), 'google_ads',    'Google Ads',      'paid',    1.0),
     (uuid_generate_v4(), 'whatsapp',      'WhatsApp',        'direct',  0.8),
     (uuid_generate_v4(), 'csv_import',    'Importação CSV',  'manual',  0.6),
-    (uuid_generate_v4(), 'instagram',     'Instagram (Apify)', 'social', 0.75)
+    (uuid_generate_v4(), 'instagram',     'Instagram (Apify)', 'social', 0.75),
+    (uuid_generate_v4(), 'google_maps',   'Google Maps',       'manual', 0.9)
 ON CONFLICT (name) DO NOTHING;
 
 -- ── Leads ─────────────────────────────────────────────────────────────────────

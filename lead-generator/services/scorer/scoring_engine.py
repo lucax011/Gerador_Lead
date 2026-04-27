@@ -40,19 +40,61 @@ class ScoringEngine:
         self.w_phone = settings.score_weight_phone_present
         self.w_domain = settings.score_weight_email_domain
 
-    def score(self, lead: Lead, source_multiplier: float) -> ScoreResult:
+    def score(self, lead: Lead, source_multiplier: float, enrichment: dict | None = None) -> ScoreResult:
         breakdown: dict[str, float] = {}
+        enrichment = enrichment or {}
 
         breakdown["data_completeness"] = self._score_completeness(lead)
         breakdown["source"] = round(source_multiplier * self.w_source, 2)
         breakdown["phone_present"] = self._score_phone(lead)
         breakdown["email_domain"] = self._score_domain(lead)
 
+        # Bônus de enriquecimento (até +15 pts, não quebra escala)
+        bonus = self._score_enrichment_bonus(lead, enrichment)
+        if bonus > 0:
+            breakdown["enrichment_bonus"] = bonus
+
         total = sum(breakdown.values())
         total = round(min(max(total, 0.0), 100.0), 2)
 
         temperature = self._classify(total)
         return ScoreResult(total=total, temperature=temperature, breakdown=breakdown)
+
+    def _score_enrichment_bonus(self, lead: Lead, enrichment: dict) -> float:
+        """
+        Bônus baseado em dados de enriquecimento.
+        Máximo de 15 pts para não inflar artificialmente.
+        """
+        bonus = 0.0
+        ig = enrichment.get("instagram") or {}
+        cnpj = enrichment.get("cnpj") or {}
+
+        # Instagram: seguidores indicam audiência real
+        followers = ig.get("followers") or lead.instagram_followers or 0
+        if followers >= 10_000:
+            bonus += 8.0
+        elif followers >= 1_000:
+            bonus += 4.0
+        elif followers >= 500:
+            bonus += 2.0
+
+        # Engajamento alto = audiência ativa (mais valioso que seguidores)
+        engagement = ig.get("engagement_rate") or lead.instagram_engagement_rate or 0
+        if engagement >= 5.0:
+            bonus += 5.0
+        elif engagement >= 3.0:
+            bonus += 3.0
+
+        # CNPJ ativo = empresa real, mais propensa a comprar
+        if cnpj.get("cnpj") and cnpj.get("situacao", "").upper() in ("ATIVA", "ATIVO"):
+            bonus += 5.0
+
+        # Email com domínio de negócio no placeholder indica lead sem email válido
+        # Penaliza levemente leads de Maps sem email real (placeholder @maps.import)
+        if lead.email and lead.email.endswith("@maps.import"):
+            bonus -= 3.0
+
+        return round(min(bonus, 15.0), 2)
 
     def _score_completeness(self, lead: Lead) -> float:
         fields = [lead.name, lead.email, lead.phone, lead.company]

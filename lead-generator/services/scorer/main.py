@@ -62,13 +62,14 @@ async def persist_score(lead: Lead, result) -> None:
         await session.commit()
 
 
-async def handle_lead_deduplicated(payload: dict[str, Any]) -> None:
+async def handle_lead_enriched(payload: dict[str, Any]) -> None:
     lead_data = payload["lead"]
     lead = Lead(**lead_data)
+    enrichment = payload.get("enrichment", {})
     log.info("Scoring lead", lead_id=str(lead.id), email=lead.email)
 
     source_multiplier = await get_source_multiplier(lead.source_name)
-    result = engine.score(lead, source_multiplier)
+    result = engine.score(lead, source_multiplier, enrichment=enrichment)
     lead.status = LeadStatus.SCORED
     lead.score = result.total
 
@@ -79,6 +80,7 @@ async def handle_lead_deduplicated(payload: dict[str, Any]) -> None:
         score=result.total,
         temperature=result.temperature,
         score_breakdown=result.breakdown,
+        enrichment=enrichment,
     )
     await publisher.publish("lead.scored", event.model_dump(mode="json"))
     log.info(
@@ -101,9 +103,9 @@ async def main() -> None:
     log.info("Connected to RabbitMQ and PostgreSQL")
 
     await consumer.consume(
-        queue_name="scorer.lead.deduplicated",
-        routing_key="lead.deduplicated",
-        handler=handle_lead_deduplicated,
+        queue_name="scorer.lead.enriched",
+        routing_key="lead.enriched",
+        handler=handle_lead_enriched,
     )
 
 
