@@ -22,7 +22,12 @@
       "WebFetch(domain:www.pipedrive.com)",
       "WebFetch(domain:www.rdstation.com)",
       "Bash(py -m pytest tests/ -q)",
-      "Bash(py -m pytest tests/enricher/test_niche_classifier.py -v)"
+      "Bash(py -m pytest tests/enricher/test_niche_classifier.py -v)",
+      "Read(//d/d/Projects/Gerador_Lead/**)",
+      "Bash(awk '{if\\(NF>0\\) print \"  \" substr\\($0, 1\\) }')",
+      "Bash(cat)",
+      "Read(//tmp/**)",
+      "Bash(awk '{print $9, \"\\(\" $5 \"\\)\"}')"
     ],
     "additionalDirectories": [
       "d:\\Projects\\Gerador_Lead\\lead-generator\\tests"
