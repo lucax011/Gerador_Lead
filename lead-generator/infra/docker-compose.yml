@@ -124,6 +124,19 @@ services:
       dockerfile: services/outreach/Dockerfile
     container_name: lead-outreach
 
+  feedback:
+    restart: unless-stopped
+    env_file: ../.env
+    networks:
+      - lead-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    build:
+      context: ..
+      dockerfile: services/feedback/Dockerfile
+    container_name: lead-feedback
+
   api:
     <<: *worker-base
     build:

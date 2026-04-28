@@ -27,7 +27,12 @@
       "Bash(awk '{if\\(NF>0\\) print \"  \" substr\\($0, 1\\) }')",
       "Bash(cat)",
       "Read(//tmp/**)",
-      "Bash(awk '{print $9, \"\\(\" $5 \"\\)\"}')"
+      "Bash(awk '{print $9, \"\\(\" $5 \"\\)\"}')",
+      "Bash(cat services/scorer/requirements.txt)",
+      "Bash(cat services/enricher/requirements.txt)",
+      "Bash(python -m alembic --version)",
+      "Bash(pip show *)",
+      "Bash(2>&1)"
     ],
     "additionalDirectories": [
       "d:\\Projects\\Gerador_Lead\\lead-generator\\tests"

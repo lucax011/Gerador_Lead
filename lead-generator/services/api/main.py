@@ -87,7 +87,7 @@ def _slug(text: str) -> str:
 
 
 def _placeholder_email(name: str) -> str:
-    return f"{_slug(name)}.{uuid4().hex[:6]}@import.local"
+    return f"{_slug(name)}.{uuid4().hex[:6]}@maps.placeholder.com"
 
 
 def _esc_html(text: str) -> str:

@@ -7,7 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        gcc \
+        gcc libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY services/api/requirements.txt /tmp/requirements.txt
@@ -17,12 +17,14 @@ FROM base AS development
 
 COPY shared/ ./shared/
 COPY services/api/ ./services/api/
+RUN chmod +x services/api/entrypoint.sh
 
-CMD ["uvicorn", "services.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["sh", "services/api/entrypoint.sh", "--reload"]
 
 FROM base AS production
 
 COPY shared/ ./shared/
 COPY services/api/ ./services/api/
+RUN chmod +x services/api/entrypoint.sh
 
-CMD ["uvicorn", "services.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "services/api/entrypoint.sh"]
