@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cmd /c mkdir \"D:\\\\Projects\\\\Gerador_Lead\\\\lead-generator\\\\services\\\\api\" 2>&1; echo \"Exit: $LASTEXITCODE\")",
+      "PowerShell(cmd /c mkdir \"D:\\\\Projects\\\\Gerador_Lead\\\\lead-generator\\\\services\\\\api\\\\static\" 2>&1)",
+      "PowerShell(cmd /c mkdir \"D:\\\\Projects\\\\Gerador_Lead\\\\lead-generator\\\\services\\\\enricher\" 2>&1)",
+      "PowerShell(cmd /c mkdir \"D:\\\\Projects\\\\Gerador_Lead\\\\lead-generator\\\\services\\\\enricher\\\\sources\" 2>&1)",
+      "PowerShell(cmd /c mkdir \"D:\\\\Projects\\\\Gerador_Lead\\\\lead-generator\\\\services\\\\orchestrator\" 2>&1)",
+      "PowerShell(cmd /c mkdir \"D:\\\\Projects\\\\Gerador_Lead\\\\lead-generator\\\\services\\\\outreach\" 2>&1)",
+      "PowerShell(cmd /c mkdir \"D:\\\\Projects\\\\Gerador_Lead\\\\lead-generator\\\\services\\\\outreach\\\\channels\" 2>&1)"
+    ]
+  }
+}

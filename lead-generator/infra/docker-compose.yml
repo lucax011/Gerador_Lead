@@ -89,6 +89,13 @@ services:
       dockerfile: services/deduplicator/Dockerfile
     container_name: lead-deduplicator
 
+  enricher:
+    <<: *worker-base
+    build:
+      context: ..
+      dockerfile: services/enricher/Dockerfile
+    container_name: lead-enricher
+
   scorer:
     <<: *worker-base
     build:
@@ -96,12 +103,35 @@ services:
       dockerfile: services/scorer/Dockerfile
     container_name: lead-scorer
 
+  orchestrator:
+    <<: *worker-base
+    build:
+      context: ..
+      dockerfile: services/orchestrator/Dockerfile
+    container_name: lead-orchestrator
+
   distributor:
     <<: *worker-base
     build:
       context: ..
       dockerfile: services/distributor/Dockerfile
     container_name: lead-distributor
+
+  outreach:
+    <<: *worker-base
+    build:
+      context: ..
+      dockerfile: services/outreach/Dockerfile
+    container_name: lead-outreach
+
+  api:
+    <<: *worker-base
+    build:
+      context: ..
+      dockerfile: services/api/Dockerfile
+    container_name: lead-api
+    ports:
+      - "8000:8000"
 
 networks:
   lead-net:

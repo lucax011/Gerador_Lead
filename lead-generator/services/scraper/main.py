@@ -22,6 +22,7 @@ from shared.database.session import AsyncSessionLocal
 from shared.models.events import LeadCapturedEvent
 from shared.models.lead import Lead, LeadStatus
 from services.scraper.registry import SourceRegistry
+from services.scraper.sources.instagram import ApifyInstagramSource
 from services.scraper.sources.web_scraper import WebScraperSource
 
 settings = get_settings()
@@ -56,10 +57,17 @@ def build_registry() -> SourceRegistry:
             )
         )
 
+    if settings.apify_token and settings.instagram_usernames_list:
+        registry.register(
+            ApifyInstagramSource(
+                token=settings.apify_token,
+                usernames=settings.instagram_usernames_list,
+            )
+        )
+
     # Future sources — uncomment when implemented:
     # registry.register(CsvSource(path=settings.csv_leads_path))
     # registry.register(ApiSource(endpoint=settings.api_leads_url, token=settings.api_token))
-    # registry.register(LinkedInSource(cookie=settings.linkedin_cookie))
 
     return registry
 
@@ -89,6 +97,7 @@ async def run_cycle(publisher: RabbitMQPublisher, registry: SourceRegistry) -> N
             continue
 
         for raw in raw_leads:
+            ig = raw.extra  # instagram fields live in extra for all sources
             lead = Lead(
                 name=raw.name,
                 email=raw.email,
@@ -98,7 +107,15 @@ async def run_cycle(publisher: RabbitMQPublisher, registry: SourceRegistry) -> N
                 source_id=source_id,
                 source_name=source_name,
                 status=LeadStatus.CAPTURED,
-                metadata=raw.extra,
+                instagram_username=ig.get("instagram_username"),
+                instagram_bio=ig.get("instagram_bio"),
+                instagram_followers=ig.get("instagram_followers"),
+                instagram_following=ig.get("instagram_following"),
+                instagram_posts=ig.get("instagram_posts"),
+                instagram_engagement_rate=ig.get("instagram_engagement_rate"),
+                instagram_account_type=ig.get("instagram_account_type"),
+                instagram_profile_url=ig.get("instagram_profile_url"),
+                metadata={k: v for k, v in ig.items() if not k.startswith("instagram_")},
             )
             event = LeadCapturedEvent(lead=lead)
             try:
