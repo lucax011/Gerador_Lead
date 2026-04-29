@@ -23,6 +23,7 @@ from shared.models.events import LeadCapturedEvent
 from shared.models.lead import Lead, LeadStatus
 from services.scraper.registry import SourceRegistry
 from services.scraper.sources.instagram import ApifyInstagramSource
+from services.scraper.sources.places import GooglePlacesSource
 from services.scraper.sources.web_scraper import WebScraperSource
 
 settings = get_settings()
@@ -54,6 +55,15 @@ def build_registry() -> SourceRegistry:
             WebScraperSource(
                 urls=settings.scraper_urls_list,
                 user_agent=settings.scraper_user_agent,
+            )
+        )
+
+    if settings.google_places_api_key and settings.google_places_terms_list and settings.google_places_location:
+        registry.register(
+            GooglePlacesSource(
+                api_key=settings.google_places_api_key,
+                search_terms=settings.google_places_terms_list,
+                location=settings.google_places_location,
             )
         )
 

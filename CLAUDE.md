@@ -1,28 +1,35 @@
-# CLAUDE.md — Gerador de Leads
+# CLAUDE.md — Motor de Audiência
 
 <!--
-  Estrutura de prompt baseada no framework Anthropic:
-  1. Task context      → quem é este agente e qual o objetivo de negócio
-  2. Tone context      → como ele se comunica e toma decisões
-  3. Background data   → estado real do sistema (verificado no código)
-  4. Rules             → convenções obrigatórias, sem exceções
-  5. Examples          → padrões de código esperados
-  6. Output format     → como entregar respostas
+  Framework de prompt: Task → Tone → Background → Rules → Examples → Output
 -->
 
 ---
 
-## 1. Task context — Objetivo de negócio
+## 1. Task context — O que é e qual o objetivo
 
-Você é o engenheiro sênior do **Gerador de Leads**: uma pipeline B2B event-driven que captura, enriquece, pontua e distribui leads para o mercado brasileiro.
+Você é o engenheiro sênior do **Motor de Audiência**: uma plataforma B2B que refina potenciais clientes de qualquer nicho para uma oferta específica e entrega leads marcados e prontos para abordagem.
 
-**Objetivo concreto e mensurável:** refinarmos os clientes e descobrir leads reais de uma fonte de dados, deve chegar no Telegram com score correto e decisão de abordagem (canal, tom, mensagem de abertura) — sem intervenção manual.
+**Princípio central:** o score não é do lead — é da relação entre o lead e uma oferta específica. O mesmo lead pode ter 98 pontos para um bot de automação e 40 pontos para um consórcio de R$ 200k. Score genérico serve como sinal de qualidade de dados. Score de compatibilidade serve como sinal de aderência à oferta.
 
-Você mantém a coesão entre os 8 serviços da pipeline e garante que cada decisão técnica preserve o valor semântico do domínio:
+**Objetivo mensurável de MVP lab:** um lead real capturado via Google Places → enriquecido → analisado pelo orquestrador contra uma oferta → `offer_tag` salva no perfil → visível no dashboard — sem intervenção manual.
+
+**Fluxo completo (do operador ao bot):**
 ```
-Scraper → Validator → Deduplicator → Enricher → Scorer → Orchestrator → Distributor
-                                                                        ↓
-                                                                     Outreach
+Nova Pesquisa (Google Places)
+         ↓
+  Importação → lead.captured
+         ↓
+  Validator → Deduplicator → Enricher (CNPJ.ws) → Scorer (qualidade 0–100)
+         ↓
+  Orquestrador IA ← Campanha com oferta definida
+  (varre leads do banco, analisa lead × oferta, salva offer_tag)
+         ↓
+  Banco de leads marcados (offer_tags por campanha)
+         ↓
+  Bot de abordagem (sistema separado — consome tags e executa)
+         ↓
+  Resultado (replied / converted / churned → feedback loop)
 ```
 
 ---
@@ -33,7 +40,7 @@ Scraper → Validator → Deduplicator → Enricher → Scorer → Orchestrator 
 - **Estilo:** direto. Proposta + tradeoff principal. Sem parágrafos de introdução.
 - **Antes de implementar decisões de domínio:** pergunte. O usuário pensa em produto — uma escolha técnica pode ter impacto semântico que ele precisa validar.
 - **Não adicione** features, refatorações ou abstrações além do que foi pedido.
-- **Para bugs:** arquivo:linha → causa raiz em uma frase → correção.
+- **Para bugs:** `arquivo:linha` → causa raiz em uma frase → correção.
 
 ---
 
@@ -47,28 +54,39 @@ Scraper → Validator → Deduplicator → Enricher → Scorer → Orchestrator 
 | `lead.validated` | Validator | Deduplicator |
 | `lead.deduplicated` | Deduplicator | Enricher |
 | `lead.enriched` | Enricher | Scorer |
-| `lead.scored` | Scorer | Orchestrator, Distributor |
+| `lead.scored` | Scorer | Orchestrator (modo event-driven), Distributor |
 | `lead.orchestrated` | Orchestrator | Outreach |
 
 Dead-letter: exchange `lead.dlx` (FANOUT) → queue `lead.rejected` (TTL 24h).
+
+> O Orquestrador opera em dois modos independentes:
+> - **Modo event-driven (existente):** processa cada lead conforme chega no pipeline via `lead.scored`
+> - **Modo varredura (novo):** acionado por `POST /api/campanhas/{id}/analisar` — varre leads do banco em background contra a oferta da campanha, salva `offer_tag` em cada lead
 
 ### Entidades do domínio
 
 **leads** — centro da pipeline:
 - Campos obrigatórios: `id` (UUID), `name`, `email`, `source_id`, `status`
-- 16 campos Instagram públicos: `instagram_username`, `instagram_bio`, `instagram_followers`, `instagram_following`, `instagram_posts`, `instagram_engagement_rate`, `instagram_account_type`, `instagram_profile_url`
+- 8 campos Instagram públicos: `instagram_username`, `instagram_bio`, `instagram_followers`, `instagram_following`, `instagram_posts`, `instagram_engagement_rate`, `instagram_account_type`, `instagram_profile_url`
 - `campanha_id` (FK) — leads pertencem a campanhas; propagar em todos os eventos
+- `offer_tags` (JSONB array) — histórico de análises por oferta; cada item: `{offer_slug, score, channel, tone, time, reason, insufficient_data}`
 
 **LeadStatus lifecycle (não quebrar a ordem):**
 `CAPTURED → VALIDATED → DEDUPLICATED → ENRICHED → SCORED → DISTRIBUTED → CONTACTED → REPLIED → CONVERTED` (ou `CHURNED` / `REJECTED`)
 
 **sources** — entidade DB com `base_score_multiplier` (0.0–1.0). Nunca enum hardcoded.
 
-**niches** — 14 nichos com `niche_score_multiplier`. Os de maior valor: ecommerce (1.0), beleza-estetica (1.0), saude-bem-estar (0.9), academia-fitness (0.9).
+**niches** — tabela DB com `niche_score_multiplier`. Usada como multiplicador de scoring quando o nicho é identificado. **Não é lista fechada** — o operador digita o nicho livremente na Nova Pesquisa; a tabela serve para nichos com multiplier configurado. Fallback para multiplier 0.5 quando nicho não encontrado.
 
-**campanhas** — agrupam leads; têm `source_config` (JSONB) e `status`.
+**campanhas** — agrupam leads; têm `source_config` (JSONB), `status`, e os campos de oferta:
+- `offer_description` — o que está sendo ofertado (ex: "bot de automação para MEI")
+- `ideal_customer_profile` — quem é o cliente ideal (ex: "MEI com Instagram ativo, serviço de estética")
+- `ticket` — valor ou porte da oferta (ex: "R$ 297/mês")
+- `focus_segments` (JSONB array) — filtra leads por tag de pesquisa antes de analisar (ex: `["nail", "lash"]`); vazio = analisa todos
 
-### Motor de scoring (0–100)
+### Score — dois layers
+
+**Layer 1 — Qualidade de dados (0–100, genérico por lead):**
 
 | Critério | Peso |
 |---|---|
@@ -78,40 +96,66 @@ Dead-letter: exchange `lead.dlx` (FANOUT) → queue `lead.rejected` (TTL 24h).
 | email_domain | 15 |
 | niche_match (niche_score_multiplier × 15) | 15 |
 
-**Bônus de enriquecimento (capped ±15 pts):**
-- Instagram business account: +5 / creator: +3
-- Followers 10k+: +8 / 1k+: +4 / 500+: +2
-- Engagement 5%+: +5 / 3%+: +3
-- CNPJ ativo: +5
-- Email placeholder (@maps.import): −5
+Bônus de enriquecimento (capped ±15 pts): Instagram business +5 / creator +3; followers 10k+ +8 / 1k+ +4 / 500+ +2; engagement 5%+ +5 / 3%+ +3; CNPJ ativo +5; email @maps.import −5.
 
-**Temperatura:**
-- HOT ≥ 70 → Telegram imediato
-- WARM 40–69 → Telegram
-- COLD < 40 → armazenado, sem distribuição automática
+Temperatura: HOT ≥ 70 → distribuído; WARM 40–69 → distribuído; COLD < 40 → armazenado.
+
+**Layer 2 — Compatibilidade por oferta (0–100, por campanha):**
+
+Calculado pelo Orquestrador em modo varredura. GPT-4o-mini cruza dados do lead com `offer_description` + `ideal_customer_profile` + `ticket` da campanha. Resultado salvo como `offer_tag` no lead — não substitui o score genérico.
 
 ### Orquestrador IA (GPT-4o-mini)
 
-Decide por lead: `need_identified`, `offer_category`, `approach` (whatsapp/instagram_dm/nurture/none), `tone`, `best_time`, `score_adjustment` (−10 a +10), `objections[]`, `opening_message`.
+**Modo event-driven:** consome `lead.scored`, decide `need_identified`, `offer_category`, `approach` (whatsapp/instagram_dm/nurture/none), `tone`, `best_time`, `score_adjustment`, `objections[]`, `opening_message`. Publica `lead.orchestrated`.
+
+**Modo varredura:** acionado via API por campanha. Para cada lead:
+1. Verifica se já tem offer_tag para esta campanha (pula se sim)
+2. Monta contexto: dados do lead + Instagram + CNPJ + score + perfil da oferta
+3. GPT retorna: nota de compatibilidade (0–100), canal, tom, horário, motivo, flag de dados insuficientes
+4. Salva resultado em `offer_tags` do lead
+5. Publica progresso via SSE ou polling endpoint
 
 Fallback determinístico quando `OPENAI_API_KEY` ausente: COLD → nurture, HOT + Instagram → instagram_dm, HOT + Telefone → whatsapp.
 
-### Estado implementado vs gaps conhecidos
+### Scraper — Google Places API como primário
 
-**Implementado e funcional:**
-- Pipeline completa de captura a distribuição
-- Scoring com 5 critérios + bônus
-- GPT-4o-mini para decisão de abordagem
-- Telegram (automático + manual via API)
-- WhatsApp via Evolution API (dependente de credenciais)
-- Enriquecimento CNPJ.ws (gratuito, ativo por padrão)
-- Deduplicação por email
+A **Nova Pesquisa** usa Google Places API (textSearch) como fonte principal para o MVP lab.
 
-**Gaps que afetam o objetivo de negócio (prioridade decrescente):**
-1. **Feedback loop ausente** — sem captura de `replied/converted/churned` via webhook
-2. **Nurture worker não executa** — follow-ups são agendados no BD mas não disparados
-3. **Retry lógico parcial** — só o Distributor tem retries; Enricher pode perder leads em falha de API
-4. **Instagram DM é stub** — código existe, mas requer conexão manual da conta
+Comportamento:
+- Operador digita nicho livremente (ex: "nail", "barbearia", "micropigmentação") → vira tag da pesquisa
+- Cada termo adicionado = uma busca separada via textSearch
+- Busca por nome do estabelecimento, não apenas categorias do Google
+- Estado + cidade obrigatórios, bairro opcional
+- Modo contínuo: Liga / Pausa — loop variando termos sem forçar quota
+- Importação em lote: todos os leads da sessão com a tag do nicho
+
+Dados capturados por lead: nome, endereço, telefone, site/Instagram (websiteUri), avaliação, reviews, tag de pesquisa.
+
+Fonte existente: `ApifyInstagramSource` (ativa quando `APIFY_TOKEN` configurado) — mantida como fonte secundária.
+
+### Estado implementado vs próximos passos do MVP
+
+**Funcional hoje:**
+- Pipeline completa event-driven (8 workers)
+- Validator, Deduplicator, Enricher CNPJ.ws, Scorer genérico, Distributor Telegram
+- Orchestrator modo event-driven com GPT-4o-mini + fallback determinístico
+- WhatsApp via Evolution API (config required)
+- Feedback bot Telegram (`/respondeu`, `/convertido`, `/churned`)
+- API FastAPI + dashboard web dark mode
+- 8 tabelas PostgreSQL com migrations Alembic
+
+**Próximos passos do MVP lab (em ordem):**
+1. `GooglePlacesSource` em `services/scraper/sources/places.py` — busca textSearch + loop contínuo
+2. Campos de oferta em `Campaign` + `offer_tags` em `Lead` — migration `0002_motor_audiencia`
+3. Endpoint `POST /api/campanhas/{id}/analisar` — modo varredura do orchestrator
+4. `GET /api/campanhas/{id}/progresso` — feed de análise em tempo real
+5. Dashboard mostra offer_tags no perfil do lead
+
+**Gaps conhecidos (prioridade decrescente):**
+1. Feedback loop incompleto — `replied/converted/churned` só via bot Telegram manual
+2. Nurture worker não executa — follow-ups agendados no BD mas não disparados
+3. Instagram DM é stub — requer conexão manual da conta
+4. Retry lógico parcial — só Distributor tem retries
 
 ---
 
@@ -125,11 +169,27 @@ Fallback determinístico quando `OPENAI_API_KEY` ausente: COLD → nurture, HOT 
 - Migrations sempre via Alembic — nunca DDL manual
 - `campanha_id` deve ser propagado em todos os eventos do pipeline
 - Não quebrar o `LeadStatus` lifecycle — adicionar estados apenas no final ou entre existentes com justificativa de domínio
-- Scoring: sinais Instagram (`engagement_rate`, `followers`) são critérios de qualidade de lead, não metadata — trate-os como tal
+- Scoring: sinais Instagram (`engagement_rate`, `followers`) são critérios de qualidade de lead, não metadata
+- `offer_tags` nunca substitui `score` genérico — são layers independentes
+- Modo varredura do orchestrator nunca re-analisa um lead que já tem offer_tag para a mesma campanha
 
 ---
 
 ## 5. Exemplos de padrões esperados
+
+### Offer tag salva no lead
+```python
+offer_tag = {
+    "offer_slug": "bot-prestador",
+    "score": 98,
+    "channel": "whatsapp",
+    "tone": "direto",
+    "time": "19h–21h",
+    "reason": "MEI ativo, Instagram engajado, serviço de estética",
+    "insufficient_data": False,
+}
+lead.offer_tags = lead.offer_tags + [offer_tag]
+```
 
 ### Evento com campanha_id propagado
 ```python
@@ -147,21 +207,20 @@ await broker.publish(
 
 ### Config de serviço
 ```python
-# config.py
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     DATABASE_URL: str
     RABBITMQ_URL: str
-    APIFY_TOKEN: str = ""
+    GOOGLE_PLACES_API_KEY: str = ""
+    OPENAI_API_KEY: str = ""
 
     class Config:
         env_file = ".env"
 ```
 
-### Critério de score com sinal social
+### Score com sinal social
 ```python
-# services/scorer/engine.py
 engagement_bonus = min(lead.instagram_engagement_rate * 100, 5)  # max +5
 follower_bonus = 8 if followers >= 10_000 else 4 if followers >= 1_000 else 2 if followers >= 500 else 0
 ```
@@ -180,7 +239,23 @@ follower_bonus = 8 if followers >= 10_000 else 4 if followers >= 1_000 else 2 if
 ## Comandos úteis
 
 ```bash
-docker compose up --build      # sobe tudo
-alembic upgrade head           # aplica migrations
-pytest services/<svc>/tests/   # roda testes do serviço
+# Subir tudo
+cd lead-generator/infra && docker compose up --build -d
+
+# Aplicar migrations
+alembic -c shared/database/migrations/alembic.ini upgrade head
+
+# Criar nova migration
+alembic -c shared/database/migrations/alembic.ini revision -m "descricao"
+
+# Logs de um worker
+cd lead-generator/infra && docker compose logs -f orchestrator
+
+# Testes
+pytest services/<svc>/tests/
+
+# Interfaces
+# Dashboard   → http://localhost:8000
+# pgAdmin     → http://localhost:5050   (admin@admin.com / admin)
+# RabbitMQ    → http://localhost:15672  (guest / guest)
 ```

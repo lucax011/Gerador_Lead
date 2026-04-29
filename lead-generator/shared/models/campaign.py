@@ -20,4 +20,9 @@ class Campaign(BaseModel):
     objective: str | None = None
     source_config: dict[str, Any] = Field(default_factory=dict)
     is_active: bool = True
+    # Campos de oferta — usados pelo orquestrador em modo varredura
+    offer_description: str | None = None
+    ideal_customer_profile: str | None = None
+    ticket: str | None = None
+    focus_segments: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)

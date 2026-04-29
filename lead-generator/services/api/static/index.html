@@ -353,6 +353,56 @@ tbody tr:hover td { background: rgba(255,255,255,.015); }
 @media (max-width: 480px) {
   .metrics-grid { grid-template-columns: 1fr; }
 }
+
+/* ─── Campaign offer fields ──────────────────────────────────────────────── */
+.offer-section { background: rgba(91,127,255,.06); border: 1px solid rgba(91,127,255,.14); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+.offer-label { font-size: 9px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--text3); font-family: var(--mono); margin-bottom: 3px; }
+.offer-value { font-size: 12px; color: var(--text); line-height: 1.5; }
+.offer-ticket { display: inline-flex; align-items: center; gap: 5px; background: rgba(62,207,142,.1); border: 1px solid rgba(62,207,142,.2); border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 700; color: var(--green); font-family: var(--mono); }
+.segment-pill { display: inline-flex; padding: 2px 9px; background: rgba(34,211,238,.1); border: 1px solid rgba(34,211,238,.2); border-radius: 12px; font-size: 10px; font-weight: 700; color: var(--cyan); font-family: var(--mono); }
+.camp-no-offer { background: rgba(245,166,35,.07); border: 1px dashed rgba(245,166,35,.25); border-radius: 8px; padding: 9px 12px; font-size: 11px; color: var(--amber); display: flex; align-items: center; gap: 7px; }
+
+/* ─── offer_tags ─────────────────────────────────────────────────────────── */
+.offer-tag-badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 5px; font-size: 10px; font-weight: 700; font-family: var(--mono); background: rgba(167,139,250,.12); color: var(--purple); border: 1px solid rgba(167,139,250,.2); cursor: pointer; white-space: nowrap; }
+.offer-tag-badge:hover { background: rgba(167,139,250,.22); }
+.offer-tag-card { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 11px 13px; margin-bottom: 8px; }
+.offer-tag-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+.offer-tag-slug { font-size: 12px; font-weight: 700; font-family: var(--mono); color: var(--purple); }
+.offer-tag-score { font-size: 20px; font-weight: 700; font-family: var(--mono); }
+.offer-tag-meta { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 6px; }
+.omp { padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; font-family: var(--mono); }
+.omp-channel { background: rgba(91,127,255,.12); color: var(--accent2); }
+.omp-tone    { background: rgba(34,211,238,.1);  color: var(--cyan); }
+.omp-time    { background: rgba(245,166,35,.1);  color: var(--amber); }
+.offer-tag-reason { font-size: 11px; color: var(--text3); line-height: 1.5; font-style: italic; }
+
+/* ─── Sweep modal ────────────────────────────────────────────────────────── */
+.sweep-modal { width: 520px; max-width: 95vw; }
+.sweep-stat-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 14px; }
+.sweep-stat { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; }
+.sweep-stat-val { font-size: 22px; font-weight: 700; font-family: var(--mono); }
+.sweep-stat-lbl { font-size: 10px; color: var(--text3); font-family: var(--mono); text-transform: uppercase; margin-top: 2px; }
+.sweep-progress-wrap { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+.sweep-progress-track { height: 8px; background: var(--bg4); border-radius: 4px; overflow: hidden; margin: 6px 0; }
+.sweep-progress-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--accent), var(--purple)); transition: width .4s ease; }
+.sweep-progress-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--text3); font-family: var(--mono); }
+.sweep-feed-wrap { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.sweep-feed-header { padding: 7px 11px; border-bottom: 1px solid var(--border); font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--text3); font-family: var(--mono); }
+.sweep-feed { max-height: 200px; overflow-y: auto; }
+.sweep-feed-item { display: flex; align-items: center; gap: 8px; padding: 7px 11px; border-bottom: 1px solid var(--border); font-size: 12px; }
+.sweep-feed-item:last-child { border-bottom: none; }
+.sweep-feed-score { font-family: var(--mono); font-weight: 700; font-size: 13px; min-width: 28px; }
+.sweep-feed-name { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sweep-feed-ch { font-size: 10px; font-family: var(--mono); color: var(--text3); }
+.sweep-status-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+.ssb-running   { background: rgba(91,127,255,.14); color: var(--accent2); }
+.ssb-paused    { background: rgba(245,166,35,.12); color: var(--amber); }
+.ssb-completed { background: rgba(62,207,142,.12); color: var(--green); }
+.ssb-error     { background: rgba(255,92,92,.1);   color: var(--red); }
+.sweep-actions { display: flex; gap: 8px; margin-top: 12px; }
+
+/* ─── Lead detail modal ──────────────────────────────────────────────────── */
+.lead-detail-modal { width: 500px; max-width: 95vw; }
 </style>
 </head>
 <body>
@@ -857,6 +907,7 @@ tbody tr:hover td { background: rgba(255,255,255,.015); }
               <th>Fonte</th>
               <th>Localização</th>
               <th>Capturado em</th>
+              <th>Análises</th>
               <th>Ações</th>
             </tr>
           </thead>
@@ -883,6 +934,16 @@ tbody tr:hover td { background: rgba(255,255,255,.015); }
 </div>
 
 <div id="toast"></div>
+
+<!-- ── Sweep Progress Modal ──���─────────────────────────────────────────────── -->
+<div class="modal-overlay" id="sweep-modal" onclick="if(event.target===this) closeSweepModal()">
+  <div class="modal sweep-modal" id="sweep-modal-body"></div>
+</div>
+
+<!-- ── Lead Detail Modal ────────────────────────��──────────────────────────── -->
+<div class="modal-overlay" id="lead-modal" onclick="if(event.target===this) closeLeadModal()">
+  <div class="modal lead-detail-modal" id="lead-modal-body"></div>
+</div>
 
 <script>
 'use strict';
@@ -924,6 +985,9 @@ let importedIds    = new Set();
 let igTags         = [];
 let csvFile        = null;
 let csvRows        = [];
+let sweepPollTimer = null;
+let sweepCampanhaId = null;
+let sweepJobId      = null;
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 const scoreTemperature = score => score >= SCORE_HOT ? 'HOT' : score >= SCORE_WARM ? 'WARM' : 'COLD';
@@ -971,6 +1035,10 @@ const api = {
   createLead:    payload       => api.request('/leads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }),
   sendTelegram:  id            => api.request(`/api/leads/${id}/telegram`, { method: 'POST' }),
   updateStage:   (id, stage)   => api.request(`/leads/${id}/stage`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stage }) }),
+  analisar:      id            => api.request(`/api/campanhas/${id}/analisar`, { method: 'POST' }),
+  progresso:     id            => api.request(`/api/campanhas/${id}/progresso`),
+  pausarJob:     jobId         => api.request(`/api/jobs/${jobId}/pausar`,  { method: 'POST' }),
+  retomarJob:    jobId         => api.request(`/api/jobs/${jobId}/retomar`, { method: 'POST' }),
 };
 
 // ─── Navigation ───────────────────────────────────────────────────────────────
@@ -1135,9 +1203,19 @@ function buildLeadRow(lead) {
     ? `<button class="btn btn-danger btn-xs" onclick="discardLead('${lead.id}',this)">Descartar</button>`
     : '';
 
+  const tags = lead.offer_tags || [];
+  const tagsHtml = tags.length
+    ? tags.map(t => {
+        const color = t.score >= 70 ? 'var(--green)' : t.score >= 40 ? 'var(--amber)' : 'var(--text3)';
+        return `<span class="offer-tag-badge" onclick="event.stopPropagation();openLeadModal('${lead.id}')" title="${escHtml(t.reason || '')}">${escHtml(t.offer_slug)} <span style="color:${color}">${Math.round(t.score)}</span></span>`;
+      }).join(' ')
+    : '<span style="color:var(--text3);font-size:11px">—</span>';
+
+  const nameClick = `onclick="openLeadModal('${lead.id}')" style="cursor:pointer"`;
+
   return `<tr>
     <td>
-      <div style="display:flex;align-items:center;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px" ${nameClick}>
         <div class="avatar avatar-sm" style="background:${avatarColor(lead.nome)}">${nameInitials(lead.nome)}</div>
         <div>
           <div style="font-weight:600">${escHtml(lead.nome)}</div>
@@ -1150,6 +1228,7 @@ function buildLeadRow(lead) {
     <td style="font-family:var(--mono);font-size:11px;color:var(--text3)">${lead.origem}</td>
     <td style="font-family:var(--mono);font-size:11px;color:var(--text3)">${lead.localizacao || '—'}</td>
     <td style="font-family:var(--mono);font-size:11px;color:var(--text3)">${formatDate(lead.created_at)}</td>
+    <td style="max-width:160px">${tagsHtml}</td>
     <td style="display:flex;gap:4px;align-items:center">
       ${telegramBtn}
       ${discardBtn}
@@ -1189,21 +1268,55 @@ async function loadCampanhas() {
   try {
     const camps = await api.getCampanhas();
     document.getElementById('campanhas-grid').innerHTML = camps.length
-      ? camps.map(camp => `
-          <div class="card">
-            <div class="card-header" style="margin-bottom:6px">
-              <div>
-                <div class="card-title">${escHtml(camp.name)}</div>
-                <div style="font-size:10px;color:var(--text3);font-family:var(--mono)">${camp.slug}</div>
-              </div>
-              <span style="font-size:10px;font-weight:700;color:var(--green)">${(camp.status||'draft').toUpperCase()}</span>
-            </div>
-            <div style="font-size:12px;color:var(--text3)">${camp.objective || 'Sem objetivo definido'}</div>
-          </div>`).join('')
+      ? camps.map(camp => buildCampanhaCard(camp)).join('')
       : '<div style="color:var(--text3);font-size:13px">Nenhuma campanha cadastrada.</div>';
   } catch (err) {
     document.getElementById('campanhas-grid').innerHTML = `<div style="color:var(--red);font-size:12px">Erro: ${err.message}</div>`;
   }
+}
+
+function buildCampanhaCard(camp) {
+  const statusColor = camp.status === 'active' ? 'var(--green)' : camp.status === 'paused' ? 'var(--amber)' : 'var(--text3)';
+  const hasOffer = !!camp.offer_description;
+
+  const offerSection = hasOffer ? `
+    <div class="offer-section" style="margin-bottom:8px">
+      <div class="offer-label">Oferta</div>
+      <div class="offer-value">${escHtml(camp.offer_description)}</div>
+    </div>
+    ${camp.ideal_customer_profile ? `
+    <div style="margin-bottom:8px">
+      <div class="offer-label">Perfil ideal</div>
+      <div class="offer-value" style="color:var(--text2)">${escHtml(camp.ideal_customer_profile)}</div>
+    </div>` : ''}
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+      ${camp.ticket ? `<span class="offer-ticket">💰 ${escHtml(camp.ticket)}</span>` : ''}
+      ${(camp.focus_segments || []).map(s => `<span class="segment-pill">#${escHtml(s)}</span>`).join('')}
+    </div>` : `
+    <div class="camp-no-offer">
+      ⚠️ Oferta não definida — preencha offer_description para habilitar varredura
+    </div>`;
+
+  const analisarBtn = hasOffer
+    ? `<button class="btn btn-primary btn-sm" onclick="startSweep('${camp.id}','${escHtml(camp.name).replace(/'/g,"\\'")}')">
+        ▶ Analisar com IA
+       </button>`
+    : `<button class="btn btn-ghost btn-sm" disabled>▶ Analisar com IA</button>`;
+
+  return `<div class="card" style="display:flex;flex-direction:column;gap:0">
+    <div class="card-header" style="margin-bottom:10px">
+      <div>
+        <div class="card-title">${escHtml(camp.name)}</div>
+        <div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:1px">${camp.slug}</div>
+      </div>
+      <span style="font-size:10px;font-weight:700;color:${statusColor}">${(camp.status||'draft').toUpperCase()}</span>
+    </div>
+    ${offerSection}
+    <div style="display:flex;gap:6px;margin-top:auto;padding-top:8px">
+      ${analisarBtn}
+      <button class="btn btn-ghost btn-sm" onclick="checkProgresso('${camp.id}','${escHtml(camp.name).replace(/'/g,"\\'")}')">Ver Progresso</button>
+    </div>
+  </div>`;
 }
 
 async function loadCampanhasDropdowns() {
@@ -1632,6 +1745,240 @@ async function submitManualLead() {
   } finally {
     btn.disabled = false;
   }
+}
+
+// ─── Sweep Modal ──────────────────────────────────────────────────────────────
+async function startSweep(campanhaId, campanhaNome) {
+  try {
+    const resp = await api.analisar(campanhaId);
+    sweepJobId     = resp.job_id;
+    sweepCampanhaId = campanhaId;
+    openSweepModal(campanhaNome);
+  } catch (err) {
+    if (err.message && err.message.includes('já em andamento')) {
+      sweepCampanhaId = campanhaId;
+      openSweepModal(campanhaNome);
+    } else {
+      showToast(`Erro ao iniciar varredura: ${err.message}`, true);
+    }
+  }
+}
+
+async function checkProgresso(campanhaId, campanhaNome) {
+  try {
+    await api.progresso(campanhaId);
+    sweepCampanhaId = campanhaId;
+    openSweepModal(campanhaNome);
+  } catch (err) {
+    showToast('Nenhuma varredura encontrada para esta campanha.', true);
+  }
+}
+
+function openSweepModal(campanhaNome) {
+  renderSweepModal(campanhaNome, null);
+  document.getElementById('sweep-modal').classList.add('open');
+  clearInterval(sweepPollTimer);
+  sweepPollTimer = setInterval(() => pollSweep(campanhaNome), 2000);
+  pollSweep(campanhaNome);
+}
+
+function closeSweepModal() {
+  clearInterval(sweepPollTimer);
+  sweepPollTimer = null;
+  document.getElementById('sweep-modal').classList.remove('open');
+}
+
+async function pollSweep(campanhaNome) {
+  if (!sweepCampanhaId) return;
+  try {
+    const job = await api.progresso(sweepCampanhaId);
+    sweepJobId = job.job_id;
+    renderSweepModal(campanhaNome, job);
+    if (job.status === 'completed' || job.status === 'error') {
+      clearInterval(sweepPollTimer);
+      sweepPollTimer = null;
+    }
+  } catch (_) {}
+}
+
+function renderSweepModal(campanhaNome, job) {
+  const modal = document.getElementById('sweep-modal-body');
+  if (!job) {
+    modal.innerHTML = `
+      <div class="modal-header">
+        <div class="modal-title">Varredura IA — ${escHtml(campanhaNome)}</div>
+        <button class="modal-close" onclick="closeSweepModal()">×</button>
+      </div>
+      <div style="color:var(--text3);font-size:12px;text-align:center;padding:24px"><span class="spinner"></span> Conectando...</div>`;
+    return;
+  }
+
+  const total    = job.total || 0;
+  const analyzed = job.analyzed || 0;
+  const pct      = total > 0 ? Math.round(analyzed / total * 100) : 0;
+  const statusBadgeClass = { running: 'ssb-running', paused: 'ssb-paused', completed: 'ssb-completed', error: 'ssb-error' }[job.status] || 'ssb-running';
+  const statusLabel = { running: '● Rodando', paused: '⏸ Pausado', completed: '✓ Concluído', error: '✕ Erro' }[job.status] || job.status;
+  const isPauseResumeVisible = job.status === 'running' || job.status === 'paused';
+
+  const feedHtml = (job.feed || []).length
+    ? (job.feed || []).map(f => {
+        const color = f.score >= 70 ? 'var(--green)' : f.score >= 40 ? 'var(--amber)' : 'var(--text3)';
+        const insuf = f.insufficient_data ? ' style="opacity:.6"' : '';
+        return `<div class="sweep-feed-item"${insuf}>
+          <span class="sweep-feed-score" style="color:${color}">${Math.round(f.score)}</span>
+          <span class="sweep-feed-name">${escHtml(f.lead_name)}</span>
+          <span class="sweep-feed-ch">${escHtml(f.channel)}</span>
+          ${f.insufficient_data ? '<span style="font-size:9px;color:var(--amber);font-family:var(--mono)">dados insuf.</span>' : ''}
+        </div>`;
+      }).join('')
+    : '<div style="padding:14px;color:var(--text3);font-size:12px;text-align:center">Aguardando primeiros resultados...</div>';
+
+  modal.innerHTML = `
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Varredura IA — ${escHtml(campanhaNome)}</div>
+        <span class="sweep-status-badge ${statusBadgeClass}" style="margin-top:4px;display:inline-flex">${statusLabel}</span>
+      </div>
+      <button class="modal-close" onclick="closeSweepModal()">×</button>
+    </div>
+
+    <div class="sweep-stat-row">
+      <div class="sweep-stat">
+        <div class="sweep-stat-val">${analyzed}<span style="font-size:13px;color:var(--text3)">/${total}</span></div>
+        <div class="sweep-stat-lbl">Analisados</div>
+      </div>
+      <div class="sweep-stat">
+        <div class="sweep-stat-val" style="color:var(--green)">${job.compatible || 0}</div>
+        <div class="sweep-stat-lbl">Compatíveis</div>
+      </div>
+      <div class="sweep-stat">
+        <div class="sweep-stat-val" style="color:var(--amber)">${job.insufficient || 0}</div>
+        <div class="sweep-stat-lbl">Dados insuf.</div>
+      </div>
+    </div>
+
+    <div class="sweep-progress-wrap">
+      <div class="sweep-progress-meta">
+        <span>Progresso</span>
+        <span>${pct}%</span>
+      </div>
+      <div class="sweep-progress-track">
+        <div class="sweep-progress-fill" style="width:${pct}%"></div>
+      </div>
+      <div class="sweep-progress-meta">
+        <span style="font-size:10px">Iniciado ${new Date(job.started_at).toLocaleString('pt-BR')}</span>
+        <span style="font-size:10px">${analyzed} de ${total} leads</span>
+      </div>
+    </div>
+
+    <div class="sweep-feed-wrap">
+      <div class="sweep-feed-header">Feed em tempo real</div>
+      <div class="sweep-feed">${feedHtml}</div>
+    </div>
+
+    ${job.error ? `<div style="background:rgba(255,92,92,.08);border:1px solid rgba(255,92,92,.2);border-radius:7px;padding:9px 12px;margin-top:10px;font-size:12px;color:var(--red)">Erro: ${escHtml(job.error)}</div>` : ''}
+
+    <div class="sweep-actions">
+      ${isPauseResumeVisible ? `<button class="btn ${job.status === 'running' ? 'btn-ghost' : 'btn-primary'} btn-sm" onclick="toggleSweepPause(this,'${job.job_id}','${job.status}')">
+        ${job.status === 'running' ? '⏸ Pausar' : '▶ Retomar'}
+      </button>` : ''}
+      <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="closeSweepModal()">Fechar</button>
+    </div>`;
+}
+
+async function toggleSweepPause(btn, jobId, currentStatus) {
+  btn.disabled = true;
+  try {
+    if (currentStatus === 'running') {
+      await api.pausarJob(jobId);
+    } else {
+      await api.retomarJob(jobId);
+    }
+  } catch (err) {
+    showToast(`Erro: ${err.message}`, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ─── Lead Detail Modal ────────────────────────────────────────────────────────
+function openLeadModal(leadId) {
+  const lead = allLeadsCache.find(l => l.id === leadId);
+  if (!lead) return;
+  renderLeadModal(lead);
+  document.getElementById('lead-modal').classList.add('open');
+}
+
+function closeLeadModal() {
+  document.getElementById('lead-modal').classList.remove('open');
+}
+
+function renderLeadModal(lead) {
+  const tags = lead.offer_tags || [];
+  const scoreColor = lead.score != null ? scoreFillColor(lead.score) : 'var(--text3)';
+
+  const tagsHtml = tags.length
+    ? tags.map(t => {
+        const sc = Math.round(t.score);
+        const scColor = sc >= 70 ? 'var(--green)' : sc >= 40 ? 'var(--amber)' : 'var(--text3)';
+        return `<div class="offer-tag-card">
+          <div class="offer-tag-header">
+            <span class="offer-tag-slug">${escHtml(t.offer_slug)}</span>
+            <span class="offer-tag-score" style="color:${scColor}">${sc}</span>
+          </div>
+          <div class="offer-tag-meta">
+            ${t.channel ? `<span class="omp omp-channel">${escHtml(t.channel)}</span>` : ''}
+            ${t.tone    ? `<span class="omp omp-tone">${escHtml(t.tone)}</span>` : ''}
+            ${t.time    ? `<span class="omp omp-time">${escHtml(t.time)}</span>` : ''}
+            ${t.insufficient_data ? `<span class="omp" style="background:rgba(245,166,35,.1);color:var(--amber)">dados insuf.</span>` : ''}
+          </div>
+          ${t.reason ? `<div class="offer-tag-reason">"${escHtml(t.reason)}"</div>` : ''}
+          ${t.analyzed_at ? `<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:6px">analisado ${new Date(t.analyzed_at).toLocaleString('pt-BR')}</div>` : ''}
+        </div>`;
+      }).join('')
+    : `<div style="color:var(--text3);font-size:12px;padding:8px 0">Nenhuma análise por oferta ainda. Use "Analisar com IA" em uma campanha.</div>`;
+
+  document.getElementById('lead-modal-body').innerHTML = `
+    <div class="modal-header">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="avatar avatar-md" style="background:${avatarColor(lead.nome)}">${nameInitials(lead.nome)}</div>
+        <div>
+          <div class="modal-title">${escHtml(lead.nome)}</div>
+          <div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:1px">${escHtml(lead.email)} · ${lead.origem}</div>
+        </div>
+      </div>
+      <button class="modal-close" onclick="closeLeadModal()">×</button>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Dados do Lead</div>
+      <div class="info-row">
+        <span class="info-key">Score</span>
+        <span class="info-val" style="color:${scoreColor}">${lead.score != null ? lead.score.toFixed(0) : '—'} ${lead.temperature ? `· ${lead.temperature}` : ''}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Stage</span>
+        <span class="info-val"><span class="badge badge-${lead.stage}">${lead.stage}</span></span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Telefone</span>
+        <span class="info-val">${lead.whatsapp || '—'}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Localização</span>
+        <span class="info-val">${lead.localizacao || '—'}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Capturado em</span>
+        <span class="info-val">${formatDate(lead.created_at)}</span>
+      </div>
+    </div>
+
+    <div class="detail-section-title" style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:8px">
+      Análises por Oferta
+      <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3)">(${tags.length} tag${tags.length !== 1 ? 's' : ''})</span>
+    </div>
+    ${tagsHtml}`;
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────

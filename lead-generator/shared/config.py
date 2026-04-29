@@ -42,6 +42,13 @@ class Settings(BaseSettings):
     hot_score_threshold: int = 70
     warm_score_threshold: int = 40
 
+    # Google Places API (Nova Pesquisa — fonte primária do MVP)
+    google_places_api_key: str = ""
+    # Termos separados por vírgula, ex: "nail,manicure,studio de unhas"
+    google_places_search_terms: str = ""
+    # Localização, ex: "São Paulo, SP" ou "Campinas, SP, Alphaville"
+    google_places_location: str = ""
+
     # Apify / Instagram
     apify_token: str | None = None
     instagram_usernames: str = ""
@@ -77,6 +84,10 @@ class Settings(BaseSettings):
     @property
     def instagram_usernames_list(self) -> list[str]:
         return [u.strip() for u in self.instagram_usernames.split(",") if u.strip()]
+
+    @property
+    def google_places_terms_list(self) -> list[str]:
+        return [t.strip() for t in self.google_places_search_terms.split(",") if t.strip()]
 
 
 @lru_cache

@@ -20,6 +20,11 @@ class CampaignORM(Base):
     objective: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Campos de oferta para o modo varredura do orquestrador
+    offer_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ideal_customer_profile: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ticket: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    focus_segments: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
 
     leads: Mapped[list["LeadORM"]] = relationship("LeadORM", back_populates="campanha")
@@ -81,6 +86,8 @@ class LeadORM(Base):
     instagram_account_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
     instagram_profile_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     metadata_: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False, default=dict)
+    # Histórico de análises por oferta — cada item: {offer_slug, score, channel, tone, time, reason, insufficient_data}
+    offer_tags: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

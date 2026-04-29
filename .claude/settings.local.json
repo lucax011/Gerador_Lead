@@ -32,7 +32,10 @@
       "Bash(cat services/enricher/requirements.txt)",
       "Bash(python -m alembic --version)",
       "Bash(pip show *)",
-      "Bash(2>&1)"
+      "Bash(2>&1)",
+      "PowerShell(& \"D:\\\\Py\\\\python.exe\" -c \"from sqlalchemy.orm.attributes import flag_modified; print\\('ok'\\)\" 2>&1)",
+      "PowerShell(& \"D:\\\\Py\\\\python.exe\" -c \"import sqlalchemy; print\\(sqlalchemy.__version__\\)\" 2>&1)",
+      "PowerShell(& \"D:\\\\Py\\\\python.exe\" -c \"import sqlalchemy.orm as orm; print\\([x for x in dir\\(orm\\) if 'flag' in x.lower\\(\\)]\\)\")"
     ],
     "additionalDirectories": [
       "d:\\Projects\\Gerador_Lead\\lead-generator\\tests"
