@@ -212,6 +212,25 @@ class LeadStatusUpdate(BaseModel):
     stage: str
 
 
+class OfferItem(BaseModel):
+    slug: str
+    description: str
+    icp: str = ""
+    ticket: str = ""
+
+
+class CampanhaWriteRequest(BaseModel):
+    name: str
+    offer_description: str | None = None
+    ideal_customer_profile: str | None = None
+    ticket: str | None = None
+    focus_segments: list[str] = []
+    offers: list[OfferItem] = []
+    offer_operator: str = "OR"
+    compatibility_threshold: int = 70
+    max_leads_per_sweep: int = 500
+
+
 # ── Lead endpoints ─────────────────────────────────────────────────────────────
 
 @app.post("/leads", status_code=201)
@@ -388,14 +407,14 @@ def _build_sweep_lead_profile(lead: LeadORM, score_obj: "ScoreORM | None") -> st
     return "\n".join(lines)
 
 
-async def _call_openai_sweep(campaign: CampaignORM, lead: LeadORM, score_obj: "ScoreORM | None") -> dict | None:
+async def _call_openai_sweep_offer(offer: dict, lead: LeadORM, score_obj: "ScoreORM | None") -> dict | None:
     if not settings.openai_api_key:
         return None
     try:
         prompt = SWEEP_PROMPT.format(
-            offer_description=campaign.offer_description or "não definida",
-            ideal_customer_profile=campaign.ideal_customer_profile or "não definido",
-            ticket=campaign.ticket or "não informado",
+            offer_description=offer.get("description") or "não definida",
+            ideal_customer_profile=offer.get("icp") or "não definido",
+            ticket=offer.get("ticket") or "não informado",
             lead_profile=_build_sweep_lead_profile(lead, score_obj),
         )
         async with httpx.AsyncClient(timeout=30) as client:
@@ -445,11 +464,30 @@ async def _run_sweep(job_id: str, campanha_id: UUID) -> None:
             job["error"] = "Campanha não encontrada"
             return
 
+        # Resolve effective offers: multi-offer list takes priority, fall back to legacy single-offer
+        if campaign.offers:
+            offers = campaign.offers
+        else:
+            offers = [{
+                "slug": campaign.slug,
+                "description": campaign.offer_description or "",
+                "icp": campaign.ideal_customer_profile or "",
+                "ticket": campaign.ticket or "",
+            }]
+
+        threshold = campaign.compatibility_threshold
+        operator = (campaign.offer_operator or "OR").upper()
+        max_leads = campaign.max_leads_per_sweep
+        offer_slugs = {o.get("slug", campaign.slug) for o in offers}
+
         async with AsyncSessionLocal() as session:
             q = select(LeadORM.id)
             if campaign.focus_segments:
                 conditions = [LeadORM.metadata_["search_tag"].astext == seg for seg in campaign.focus_segments]
                 q = q.where(or_(*conditions))
+            else:
+                q = q.where(LeadORM.status == LeadStatus.SCORED.value)
+            q = q.limit(max_leads)
             result = await session.execute(q)
             lead_ids = [row[0] for row in result.all()]
 
@@ -470,41 +508,58 @@ async def _run_sweep(job_id: str, campanha_id: UUID) -> None:
                     job["analyzed"] += 1
                     continue
 
-                existing_tags = lead.offer_tags or []
-                if any(t.get("offer_slug") == campaign.slug for t in existing_tags):
-                    job["analyzed"] += 1
-                    continue
-
+                existing_tags = list(lead.offer_tags or [])
+                existing_slugs = {t.get("offer_slug") for t in existing_tags}
                 score_obj = lead.scores[0] if lead.scores else None
-                result_dict = await _call_openai_sweep(campaign, lead, score_obj) or _fallback_sweep(lead, score_obj)
 
-                offer_tag = {
-                    "offer_slug": campaign.slug,
-                    "score": result_dict.get("score", 0),
-                    "channel": result_dict.get("channel", "nurture"),
-                    "tone": result_dict.get("tone", "educativo"),
-                    "time": result_dict.get("time", "—"),
-                    "reason": result_dict.get("reason", ""),
-                    "insufficient_data": bool(result_dict.get("insufficient_data", False)),
-                    "analyzed_at": datetime.utcnow().isoformat(),
-                }
+                new_tags: list[dict] = []
+                for offer in offers:
+                    offer_slug = offer.get("slug") or campaign.slug
+                    if offer_slug in existing_slugs:
+                        continue
+                    result_dict = await _call_openai_sweep_offer(offer, lead, score_obj) or _fallback_sweep(lead, score_obj)
+                    new_tags.append({
+                        "offer_slug": offer_slug,
+                        "score": result_dict.get("score", 0),
+                        "channel": result_dict.get("channel", "nurture"),
+                        "tone": result_dict.get("tone", "educativo"),
+                        "time": result_dict.get("time", "—"),
+                        "reason": result_dict.get("reason", ""),
+                        "insufficient_data": bool(result_dict.get("insufficient_data", False)),
+                        "analyzed_at": datetime.utcnow().isoformat(),
+                    })
 
-                lead.offer_tags = list(existing_tags) + [offer_tag]
-                flag_modified(lead, "offer_tags")
-                await session.commit()
+                if new_tags:
+                    lead.offer_tags = existing_tags + new_tags
+                    flag_modified(lead, "offer_tags")
+                    await session.commit()
+
+                # AND/OR compatibility across all offers for this campaign
+                all_offer_tags = [t for t in (existing_tags + new_tags) if t.get("offer_slug") in offer_slugs]
+                offer_scores = [t["score"] for t in all_offer_tags]
+                if operator == "AND":
+                    compatible = len(offer_scores) >= len(offers) and all(s >= threshold for s in offer_scores)
+                else:
+                    compatible = any(s >= threshold for s in offer_scores)
+
+                any_insufficient = any(t.get("insufficient_data") for t in new_tags)
 
             job["analyzed"] += 1
-            if offer_tag["score"] >= 70:
+            if compatible:
                 job["compatible"] += 1
-            if offer_tag.get("insufficient_data"):
+            if any_insufficient:
                 job["insufficient"] += 1
-            job["feed"] = ([{
-                "lead_name": lead.name,
-                "score": offer_tag["score"],
-                "channel": offer_tag["channel"],
-                "reason": offer_tag["reason"],
-                "insufficient_data": offer_tag["insufficient_data"],
-            }] + job["feed"])[:20]
+
+            for tag in new_tags:
+                job["feed"] = ([{
+                    "lead_name": lead.name,
+                    "offer_slug": tag["offer_slug"],
+                    "score": tag["score"],
+                    "channel": tag["channel"],
+                    "reason": tag["reason"],
+                    "insufficient_data": tag["insufficient_data"],
+                    "compatible": compatible,
+                }] + job["feed"])[:20]
 
             await asyncio.sleep(0.5)
 
@@ -590,6 +645,10 @@ async def get_campanhas():
             "ideal_customer_profile": c.ideal_customer_profile,
             "ticket": c.ticket,
             "focus_segments": c.focus_segments or [],
+            "offers": c.offers or [],
+            "offer_operator": c.offer_operator or "OR",
+            "compatibility_threshold": c.compatibility_threshold if c.compatibility_threshold is not None else 70,
+            "max_leads_per_sweep": c.max_leads_per_sweep if c.max_leads_per_sweep is not None else 500,
         }
         for c in camps
     ]
@@ -613,8 +672,8 @@ async def analisar_campanha(campanha_id: str):
 
     if not campaign:
         raise HTTPException(status_code=404, detail="Campanha não encontrada")
-    if not campaign.offer_description:
-        raise HTTPException(status_code=422, detail="Campanha sem oferta definida — preencha offer_description antes de analisar")
+    if not campaign.offers and not campaign.offer_description:
+        raise HTTPException(status_code=422, detail="Campanha sem oferta definida — adicione ao menos uma oferta antes de analisar")
 
     for job in sweep_jobs.values():
         if job["campanha_id"] == campanha_id and job["status"] == "running":
@@ -633,6 +692,9 @@ async def analisar_campanha(campanha_id: str):
         "feed": [],
         "started_at": datetime.utcnow().isoformat(),
         "error": None,
+        "operator": (campaign.offer_operator or "OR").upper(),
+        "threshold": campaign.compatibility_threshold if campaign.compatibility_threshold is not None else 70,
+        "offers_count": len(campaign.offers) if campaign.offers else 1,
     }
     asyncio.create_task(_run_sweep(job_id, camp_uuid))
     logger.info("sweep_started", job_id=job_id, campanha=campaign.name)
@@ -762,6 +824,67 @@ async def get_orchestration(lead_id: str):
         "model_used":      orch.model_used,
         "decided_at":      orch.decided_at.isoformat(),
     }
+
+
+@app.post("/api/campanhas", status_code=201)
+async def create_campanha(body: CampanhaWriteRequest):
+    """Cria uma nova campanha com suporte a múltiplas ofertas."""
+    slug = _slug(body.name) or f"camp{uuid4().hex[:6]}"
+    async with AsyncSessionLocal() as session:
+        existing = (await session.execute(select(CampaignORM).where(CampaignORM.slug == slug))).scalar_one_or_none()
+        if existing:
+            slug = f"{slug}{uuid4().hex[:4]}"
+        camp = CampaignORM(
+            id=uuid4(),
+            name=body.name,
+            slug=slug,
+            status="active",
+            is_active=True,
+            offer_description=body.offer_description,
+            ideal_customer_profile=body.ideal_customer_profile,
+            ticket=body.ticket,
+            focus_segments=body.focus_segments,
+            offers=[o.model_dump() for o in body.offers],
+            offer_operator=body.offer_operator.upper(),
+            compatibility_threshold=body.compatibility_threshold,
+            max_leads_per_sweep=body.max_leads_per_sweep,
+            source_config={},
+            created_at=datetime.utcnow(),
+        )
+        session.add(camp)
+        await session.commit()
+        await session.refresh(camp)
+    logger.info("campanha_created", campanha_id=str(camp.id), name=camp.name)
+    return {"id": str(camp.id), "slug": camp.slug, "name": camp.name}
+
+
+@app.patch("/api/campanhas/{campanha_id}", status_code=200)
+async def update_campanha(campanha_id: str, body: CampanhaWriteRequest):
+    """Atualiza oferta(s) e configurações de uma campanha."""
+    try:
+        camp_uuid = UUID(campanha_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="campanha_id inválido")
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(CampaignORM).where(CampaignORM.id == camp_uuid))
+        camp = result.scalar_one_or_none()
+        if not camp:
+            raise HTTPException(status_code=404, detail="Campanha não encontrada")
+        camp.name = body.name
+        camp.offer_description = body.offer_description
+        camp.ideal_customer_profile = body.ideal_customer_profile
+        camp.ticket = body.ticket
+        camp.focus_segments = body.focus_segments
+        camp.offers = [o.model_dump() for o in body.offers]
+        camp.offer_operator = body.offer_operator.upper()
+        camp.compatibility_threshold = body.compatibility_threshold
+        camp.max_leads_per_sweep = body.max_leads_per_sweep
+        flag_modified(camp, "offers")
+        flag_modified(camp, "focus_segments")
+        await session.commit()
+    logger.info("campanha_updated", campanha_id=campanha_id)
+    return {"id": campanha_id, "status": "updated"}
 
 
 # ── Static (frontend dashboard) ────────────────────────────────────────────────

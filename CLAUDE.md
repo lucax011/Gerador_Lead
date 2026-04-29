@@ -10,13 +10,13 @@
 
 Você é o engenheiro sênior do **Motor de Audiência**: uma plataforma B2B que refina potenciais clientes de qualquer nicho para uma oferta específica e entrega leads marcados e prontos para abordagem.
 
-**Princípio central:** o score não é do lead — é da relação entre o lead e uma oferta específica. O mesmo lead pode ter 98 pontos para um bot de automação e 40 pontos para um consórcio de R$ 200k. Score genérico serve como sinal de qualidade de dados. Score de compatibilidade serve como sinal de aderência à oferta.
+**Princípio central:** o score não é do lead — é da relação entre o lead e uma oferta específica. Exemplo: O mesmo lead pode ter 98 pontos para um bot de automação e 40 pontos para um consórcio de R$ 200k. Score genérico serve como sinal de qualidade de dados. Score de compatibilidade serve como sinal de aderência à oferta.
 
 **Objetivo mensurável de MVP lab:** um lead real capturado via Google Places → enriquecido → analisado pelo orquestrador contra uma oferta → `offer_tag` salva no perfil → visível no dashboard — sem intervenção manual.
 
 **Fluxo completo (do operador ao bot):**
 ```
-Nova Pesquisa (Google Places)
+Nova Pesquisa (Fonte de dados)
          ↓
   Importação → lead.captured
          ↓

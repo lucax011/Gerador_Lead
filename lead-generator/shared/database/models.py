@@ -20,11 +20,16 @@ class CampaignORM(Base):
     objective: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    # Campos de oferta para o modo varredura do orquestrador
+    # Campos de oferta legados (single-offer) — mantidos para retrocompatibilidade
     offer_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     ideal_customer_profile: Mapped[str | None] = mapped_column(Text, nullable=True)
     ticket: Mapped[str | None] = mapped_column(String(100), nullable=True)
     focus_segments: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    # Multi-offer (0003_multi_offer): cada item {slug, description, icp, ticket}
+    offers: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    offer_operator: Mapped[str] = mapped_column(String(3), nullable=False, default="OR")
+    compatibility_threshold: Mapped[int] = mapped_column(Integer, nullable=False, default=70)
+    max_leads_per_sweep: Mapped[int] = mapped_column(Integer, nullable=False, default=500)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
 
     leads: Mapped[list["LeadORM"]] = relationship("LeadORM", back_populates="campanha")
