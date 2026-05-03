@@ -46,18 +46,18 @@ public sealed class JwtService : IJwtService
         try
         {
             var handler = new JwtSecurityTokenHandler();
+            handler.InboundClaimTypeMap.Clear();
             var key = Encoding.UTF8.GetBytes(_options.Secret);
-            handler.ValidateToken(token, new TokenValidationParameters
+            var principal = handler.ValidateToken(token, new TokenValidationParameters
             {
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey = new SymmetricSecurityKey(key),
-                ValidateIssuer = true,
-                ValidIssuer = _options.Issuer,
-                ValidateAudience = true,
-                ValidAudience = _options.Audience,
+                ValidateIssuer = true, ValidIssuer = _options.Issuer,
+                ValidateAudience = true, ValidAudience = _options.Audience,
                 ClockSkew = TimeSpan.Zero,
-            }, out var validated);
-            return Guid.Parse(((JwtSecurityToken)validated).Subject);
+            }, out _);
+            var sub = principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
+            return Guid.TryParse(sub, out var id) ? id : null;
         }
         catch { return null; }
     }

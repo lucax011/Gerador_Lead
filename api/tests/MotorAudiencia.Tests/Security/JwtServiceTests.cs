@@ -51,4 +51,47 @@ public class JwtServiceTests
         result.ExpiresAt.Should().BeAfter(DateTime.UtcNow);
         result.FamilyId.Should().NotBeEmpty();
     }
+
+    [Fact]
+    public void ValidateAccessToken_WrongSigningKey_ReturnsNull()
+    {
+        var user = User.Create("admin", "hash");
+        var wrongKeyService = new JwtService(Options.Create(new JwtOptions
+        {
+            Secret = "wrong-secret-must-be-at-least-64-chars-long-for-hmac-sha256-!!",
+            Issuer = _opts.Issuer,
+            Audience = _opts.Audience,
+        }));
+        var token = wrongKeyService.GenerateAccessToken(user);
+        _sut.ValidateAccessToken(token).Should().BeNull();
+    }
+
+    [Fact]
+    public void ValidateAccessToken_WrongIssuer_ReturnsNull()
+    {
+        var user = User.Create("admin", "hash");
+        var wrongIssuerService = new JwtService(Options.Create(new JwtOptions
+        {
+            Secret = _opts.Secret,
+            Issuer = "wrong-issuer",
+            Audience = _opts.Audience,
+        }));
+        var token = wrongIssuerService.GenerateAccessToken(user);
+        _sut.ValidateAccessToken(token).Should().BeNull();
+    }
+
+    [Fact]
+    public void ValidateAccessToken_ExpiredToken_ReturnsNull()
+    {
+        var expiredService = new JwtService(Options.Create(new JwtOptions
+        {
+            Secret = _opts.Secret,
+            Issuer = _opts.Issuer,
+            Audience = _opts.Audience,
+            AccessTokenMinutes = -1,  // already expired
+        }));
+        var user = User.Create("admin", "hash");
+        var token = expiredService.GenerateAccessToken(user);
+        _sut.ValidateAccessToken(token).Should().BeNull();
+    }
 }
