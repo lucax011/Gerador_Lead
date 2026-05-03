@@ -1,4 +1,5 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -50,11 +51,18 @@ builder.Services.AddAuthorization();
 // Rate Limiting
 builder.Services.AddRateLimiter(opt =>
 {
-    opt.AddSlidingWindowLimiter("global", lim =>
-    {
-        lim.PermitLimit = 100; lim.Window = TimeSpan.FromMinutes(1);
-        lim.SegmentsPerWindow = 6;
-    });
+    opt.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
+        RateLimitPartition.GetSlidingWindowLimiter(
+            ctx.Connection.RemoteIpAddress?.ToString() ?? "anon",
+            _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = 100,
+                Window = TimeSpan.FromMinutes(1),
+                SegmentsPerWindow = 6,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+            }));
+
     opt.AddSlidingWindowLimiter("login", lim =>
     {
         lim.PermitLimit = 10; lim.Window = TimeSpan.FromMinutes(1);

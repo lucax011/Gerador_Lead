@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using MotorAudiencia.Application.DTOs;
 using MotorAudiencia.Application.UseCases.Auth;
 
@@ -10,6 +11,7 @@ namespace MotorAudiencia.API.Controllers;
 public sealed class AuthController(LoginUseCase login, RefreshTokenUseCase refresh) : ControllerBase
 {
     [HttpPost("login")]
+    [EnableRateLimiting("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest req, CancellationToken ct)
     {
         var result = await login.ExecuteAsync(req, ct);
