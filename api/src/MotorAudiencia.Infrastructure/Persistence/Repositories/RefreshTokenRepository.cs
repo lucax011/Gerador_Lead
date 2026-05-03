@@ -26,12 +26,9 @@ public sealed class RefreshTokenRepository(AppDbContext db) : IRefreshTokenRepos
 
     public async Task RevokeAsync(string token, CancellationToken ct = default)
     {
-        var entity = await db.RefreshTokens.FirstOrDefaultAsync(r => r.Token == token, ct);
-        if (entity is not null)
-        {
-            entity.IsRevoked = true;
-            await db.SaveChangesAsync(ct);
-        }
+        await db.RefreshTokens
+            .Where(r => r.Token == token && !r.IsRevoked)
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.IsRevoked, true), ct);
     }
 
     public async Task RevokeAllByFamilyAsync(Guid familyId, CancellationToken ct = default)

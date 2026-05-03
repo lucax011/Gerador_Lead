@@ -11,10 +11,10 @@ public sealed class UserRepository(AppDbContext db) : IUserRepository
 
     public async Task<User?> FindByRefreshTokenAsync(string token, CancellationToken ct = default)
     {
-        var refreshToken = await db.RefreshTokens
-            .FirstOrDefaultAsync(r => r.Token == token, ct);
-        if (refreshToken is null) return null;
-        return await db.Users.FirstOrDefaultAsync(u => u.Id == refreshToken.UserId, ct);
+        return await db.RefreshTokens
+            .Where(r => r.Token == token)
+            .Select(r => r.User)
+            .FirstOrDefaultAsync(ct);
     }
 
     public async Task SaveAsync(User user, CancellationToken ct = default)

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using MotorAudiencia.Domain.Entities;
 
 namespace MotorAudiencia.Infrastructure.Persistence.Entities;
 
@@ -16,4 +17,6 @@ public sealed class RefreshTokenEntity
 
     public bool IsExpired => DateTime.UtcNow > ExpiresAt;
     public bool IsActive => !IsRevoked && !IsExpired;
+
+    public User? User { get; set; }
 }
