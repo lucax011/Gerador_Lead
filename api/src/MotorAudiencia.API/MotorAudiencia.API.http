@@ -1,0 +1,6 @@
+@MotorAudiencia.API_HostAddress = http://localhost:5056
+
+GET {{MotorAudiencia.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

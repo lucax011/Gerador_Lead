@@ -1,6 +1,6 @@
 # .NET
-api/bin/
-api/obj/
+api/**/bin/
+api/**/obj/
 api/**/.vs/
 *.user
 *.suo
