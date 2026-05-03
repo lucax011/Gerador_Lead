@@ -27,6 +27,7 @@
     <ProjectReference Include="..\..\src\MotorAudiencia.Domain\MotorAudiencia.Domain.csproj" />
     <ProjectReference Include="..\..\src\MotorAudiencia.Application\MotorAudiencia.Application.csproj" />
     <ProjectReference Include="..\..\src\MotorAudiencia.Infrastructure\MotorAudiencia.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\MotorAudiencia.API\MotorAudiencia.API.csproj" />
   </ItemGroup>
 
 </Project>
