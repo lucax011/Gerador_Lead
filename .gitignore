@@ -1,0 +1,21 @@
+# .NET
+api/**/bin/
+api/**/obj/
+api/**/.vs/
+*.user
+*.suo
+
+# Node
+services/*/node_modules/
+web/node_modules/
+web/.next/
+
+# Env
+.env
+!.env.example
+
+# Superpowers
+.superpowers/
+
+# Generated OpenAPI contracts
+shared/contracts/
