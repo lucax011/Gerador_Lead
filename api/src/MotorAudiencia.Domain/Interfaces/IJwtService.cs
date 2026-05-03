@@ -6,6 +6,6 @@ namespace MotorAudiencia.Domain.Interfaces;
 public interface IJwtService
 {
     string GenerateAccessToken(User user);
-    string GenerateRefreshToken(out Guid familyId, out DateTime expiresAt);
+    RefreshTokenResult GenerateRefreshToken(Guid userId);
     Guid? ValidateAccessToken(string token);
 }

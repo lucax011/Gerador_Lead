@@ -12,10 +12,28 @@ public sealed class Lead
     public string? Company { get; private set; }
     public LeadStatus Status { get; private set; } = LeadStatus.Captured;
     public Guid? CampaignId { get; private set; }
-    public List<string> Tags { get; private set; } = [];
+    private List<string> _tags = [];
+    public IReadOnlyList<string> Tags => _tags.AsReadOnly();
     public string? PerfilResumido { get; private set; }
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; private set; } = DateTime.UtcNow;
+
+    private static readonly Dictionary<LeadStatus, LeadStatus[]> AllowedTransitions = new()
+    {
+        [LeadStatus.Captured]     = [LeadStatus.Validated, LeadStatus.Rejected],
+        [LeadStatus.Validated]    = [LeadStatus.Deduplicated, LeadStatus.Rejected],
+        [LeadStatus.Deduplicated] = [LeadStatus.Enriched, LeadStatus.Rejected],
+        [LeadStatus.Enriched]     = [LeadStatus.Scored, LeadStatus.Rejected],
+        [LeadStatus.Scored]       = [LeadStatus.Tagged, LeadStatus.Distributed, LeadStatus.Rejected],
+        [LeadStatus.Tagged]       = [LeadStatus.Orchestrated, LeadStatus.Rejected],
+        [LeadStatus.Orchestrated] = [LeadStatus.Distributed, LeadStatus.Rejected],
+        [LeadStatus.Distributed]  = [LeadStatus.Contacted, LeadStatus.Rejected],
+        [LeadStatus.Contacted]    = [LeadStatus.Replied, LeadStatus.Churned],
+        [LeadStatus.Replied]      = [LeadStatus.Converted, LeadStatus.Churned],
+        [LeadStatus.Converted]    = [],
+        [LeadStatus.Churned]      = [],
+        [LeadStatus.Rejected]     = [],
+    };
 
     private Lead() { }
 
@@ -26,5 +44,16 @@ public sealed class Lead
         return new Lead { Name = name, Email = email.ToLowerInvariant(), Phone = phone, Company = company };
     }
 
-    public void AdvanceStatus(LeadStatus next) => Status = next;
+    public void AdvanceStatus(LeadStatus next)
+    {
+        if (!AllowedTransitions.TryGetValue(Status, out var allowed) || !allowed.Contains(next))
+            throw new InvalidOperationException($"Invalid transition: {Status} → {next}");
+        Status = next;
+    }
+
+    public void SetTags(IEnumerable<string> tags)
+    {
+        _tags = [..tags];
+        UpdatedAt = DateTime.UtcNow;
+    }
 }

@@ -10,7 +10,8 @@ public sealed class Campaign
     public string? OfferDescription { get; private set; }
     public string? IdealCustomerProfile { get; private set; }
     public string? Ticket { get; private set; }
-    public List<string> KeywordsAlvo { get; private set; } = [];
+    private List<string> _keywordsAlvo = [];
+    public IReadOnlyList<string> KeywordsAlvo => _keywordsAlvo.AsReadOnly();
     public bool IsActive { get; private set; } = true;
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
 
