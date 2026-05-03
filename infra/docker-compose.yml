@@ -49,10 +49,10 @@ services:
       start_period: 30s
 
   pgadmin:
-    image: dpage/pgadmin4:latest
+    image: dpage/pgadmin4:8
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@admin.com
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@admin.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
     ports:
       - "5050:80"
     networks:
@@ -62,14 +62,14 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  api:
-    <<: *worker-base
-    build:
-      context: ../api
-      dockerfile: Dockerfile
-    container_name: ma-api
-    ports:
-      - "5000:5000"
+  # api:  # Uncomment after Task 8 (api/Dockerfile)
+  #   <<: *worker-base
+  #   build:
+  #     context: ../api
+  #     dockerfile: Dockerfile
+  #   container_name: ma-api
+  #   ports:
+  #     - "5000:5000"
 
 networks:
   ma-net:

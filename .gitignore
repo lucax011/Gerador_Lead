@@ -16,3 +16,6 @@ web/.next/
 
 # Superpowers
 .superpowers/
+
+# Generated OpenAPI contracts
+shared/contracts/
