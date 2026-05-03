@@ -633,12 +633,6 @@ tbody tr:hover td { background: rgba(245,166,35,.025); }
               </div>
 
               <div class="form-group">
-                <label class="form-label">API Key</label>
-                <input type="password" class="form-input" id="maps-api-key" placeholder="AIza...">
-                <div class="input-hint">Google Cloud Console → Places API (New) → Credenciais</div>
-              </div>
-
-              <div class="form-group">
                 <label class="form-label">
                   1. Nicho / Segmento
                   <span class="form-hint" id="niche-count-hint"></span>
@@ -1587,21 +1581,21 @@ document.getElementById('bairros').addEventListener('input', function() {
 function buildSearchJobs(cidade) {
   const bairroLines = document.getElementById('bairros').value.trim().split('\n').filter(Boolean);
   if (!bairroLines.length) {
-    return searchQueries.map(q => ({ ...q, location: cidade }));
+    return searchQueries.map(q => ({ ...q, location: cidade, neighborhood: '' }));
   }
-  return searchQueries.flatMap(q => bairroLines.map(b => ({ ...q, location: `${b.trim()}, ${cidade}` })));
+  return searchQueries.flatMap(q => bairroLines.map(b => ({ ...q, location: `${b.trim()}, ${cidade}`, neighborhood: b.trim() })));
 }
 
 async function runMapsSearch() {
-  const apiKey  = document.getElementById('maps-api-key').value.trim();
   const cidade  = document.getElementById('cidade').value.trim();
   const maxRes  = parseInt(document.getElementById('max-results').value, 10);
 
-  if (!apiKey)             { alert('Insira a API Key do Google Cloud'); return; }
   if (!cidade)             { alert('Insira uma cidade'); return; }
   if (!searchQueries.length) { alert('Adicione pelo menos um termo de busca'); return; }
 
-  localStorage.setItem('gplaces_key', apiKey);
+  const cidadeParts = cidade.split(',').map(s => s.trim());
+  const cityName    = cidadeParts[0] || '';
+  const stateName   = cidadeParts[1] || '';
 
   const jobs = buildSearchJobs(cidade);
   const btn  = document.getElementById('btn-search');
@@ -1635,15 +1629,21 @@ async function runMapsSearch() {
     icon.innerHTML   = '<span class="spinner"></span>';
 
     try {
-      const resp = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      const resp = await fetch('/api/search', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': MAPS_FIELD_MASK },
-        body: JSON.stringify({ textQuery: `${job.text} em ${job.location}`, maxResultCount: maxRes, languageCode: 'pt-BR' }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          terms: [job.text],
+          city: cityName,
+          state: stateName,
+          neighborhood: job.neighborhood || '',
+          max_results: maxRes,
+        }),
       });
 
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
-        appendLog(`Erro ${resp.status}: ${err?.error?.message || resp.statusText}`, 'err');
+        appendLog(`Erro ${resp.status}: ${err?.detail || resp.statusText}`, 'err');
         icon.className = 'step-icon si-error';
         icon.textContent = '✕';
         countEl.textContent = 'erro';
@@ -1651,7 +1651,7 @@ async function runMapsSearch() {
       }
 
       const data      = await resp.json();
-      const places    = (data.places || []).map(p => ({ ...p, _query: job.text, _location: job.location, _source: job.source }));
+      const places    = data.results || [];
       const existingIds = new Set(mapsResults.map(r => r.id));
       const newOnes   = places.filter(p => p.id && !existingIds.has(p.id));
       mapsResults.push(...newOnes);
@@ -2091,6 +2091,20 @@ function renderLeadModal(lead) {
     ? tags.map(t => {
         const sc = Math.round(t.score);
         const scColor = sc >= 70 ? 'var(--green)' : sc >= 40 ? 'var(--amber)' : 'var(--text3)';
+        const bd = t.score_breakdown;
+        const breakdownHtml = bd ? `
+          <div style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
+            ${[['ICP Match', bd.icp_match], ['Canal pronto', bd.channel_readiness], ['Qualidade dados', bd.data_quality]].map(([label, val]) => {
+              const pct = Math.round((val / Math.max(sc, 1)) * 100);
+              return `<div style="display:flex;align-items:center;gap:6px">
+                <span style="font-size:10px;color:var(--text2);width:100px;flex-shrink:0">${label}</span>
+                <div style="flex:1;height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden">
+                  <div style="height:100%;width:${pct}%;background:${scColor};border-radius:3px;transition:width .3s"></div>
+                </div>
+                <span style="font-size:10px;color:var(--text3);font-family:var(--mono);width:22px;text-align:right">${Math.round(val)}</span>
+              </div>`;
+            }).join('')}
+          </div>` : '';
         return `<div class="offer-tag-card">
           <div class="offer-tag-header">
             <span class="offer-tag-slug">${escHtml(t.offer_slug)}</span>
@@ -2103,6 +2117,7 @@ function renderLeadModal(lead) {
             ${t.insufficient_data ? `<span class="omp" style="background:rgba(245,166,35,.1);color:var(--amber)">dados insuf.</span>` : ''}
           </div>
           ${t.reason ? `<div class="offer-tag-reason">"${escHtml(t.reason)}"</div>` : ''}
+          ${breakdownHtml}
           ${t.analyzed_at ? `<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:6px">analisado ${new Date(t.analyzed_at).toLocaleString('pt-BR')}</div>` : ''}
         </div>`;
       }).join('')
@@ -2347,10 +2362,6 @@ async function saveCampanha() {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 (function init() {
-  // Restore saved API key
-  const savedKey = localStorage.getItem('gplaces_key');
-  if (savedKey) document.getElementById('maps-api-key').value = savedKey;
-
   renderQueryList();
 
   // Load campanhas for all dropdowns

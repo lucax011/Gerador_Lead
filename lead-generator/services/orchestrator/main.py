@@ -35,6 +35,7 @@ from shared.database.models import LeadORM, OrchestrationORM
 from shared.database.session import AsyncSessionLocal
 from shared.models.events import LeadOrchestratedEvent
 from shared.models.lead import Lead, LeadStatus
+from shared.niche_contexts import NICHE_CONTEXTS
 
 settings = get_settings()
 
@@ -46,23 +47,6 @@ log = structlog.get_logger(__name__)
 
 publisher: RabbitMQPublisher
 
-NICHE_CONTEXTS: dict[str, str] = {
-    "ecommerce":          "E-commerce: precisa de mais tráfego e conversão. Foco em automação de carrinho abandonado, retargeting e atendimento rápido via WhatsApp.",
-    "beleza-estetica":    "Beleza/Estética: nail designers, salões, barbearias, lash. Alta presença no Instagram, WhatsApp como canal principal. Precisam de agenda cheia e fidelização de clientes recorrentes.",
-    "saude-bem-estar":    "Saúde/Bem-estar: clínicas, nutricionistas, psicólogos, academias de yoga. Precisam de pacientes recorrentes e agenda otimizada. Prova social e depoimentos são muito eficazes.",
-    "academia-fitness":   "Academia/Fitness: personal trainers, estúdios, boxes de CrossFit. Precisam captar alunos mensalistas e reter matriculados. Sazonalidade: janeiro e pós-Carnaval são picos.",
-    "alimentacao":        "Alimentação/Gastronomia: restaurantes, cafés, delivery. Precisam de movimento constante e fidelização. Ticket médio baixo, alto volume. WhatsApp para delivery funciona muito bem.",
-    "pet-shop":           "Pet Shop/Veterinária: petshops, clínicas vet, grooming. Dono de pet é cliente fiel quando há confiança. Precisam de agendamento fácil e comunicação proativa.",
-    "servicos-juridicos": "Jurídico: advogados, escritórios. Abordagem educativa e de autoridade. Ciclo longo, mas ticket alto. Geração de leads via conteúdo e indicação.",
-    "financeiro":         "Financeiro/Fintech: seguros, investimentos, fintechs. Tom profissional e objetivo. Conformidade é objeção comum. CNPJ ativo e renda documentada são qualificadores.",
-    "imoveis":            "Imóveis: corretores, imobiliárias, construtoras. Alta comissão tolera alto custo de prospecção. Precisam de leads qualificados de compradores/locatários. WhatsApp é padrão do setor.",
-    "educacao":           "Educação: cursos, faculdades, treinamentos. Ciclos de matrícula com picos sazonais. Urgência por vagas + desconto funcionam. Prova social com depoimentos de alunos.",
-    "moda-vestuario":     "Moda/Vestuário: boutiques, moda feminina, acessórios. Instagram é canal de vitrine. Precisam de clientes recorrentes e lançamentos. Engajamento alto = boa conversão.",
-    "tecnologia":         "Tecnologia/SaaS: empresas de TI, startups. Ciclo de venda longo, múltiplos decisores. Foco em ROI, cases e demos. LinkedIn > Instagram para B2B tech.",
-    "construcao-reformas":"Construção/Reformas: construtoras, reformadores, decoradores. Ticket alto, ciclo longo. Indicação e portfólio visual são os principais gatilhos. WhatsApp para orçamentos.",
-    "contabilidade":      "Contabilidade/Assessoria: contadores, BPO financeiro. Precisam de MEIs e PMEs como clientes. Dor principal: simplificar obrigações fiscais. Abordagem educativa funciona.",
-    "industria":          "Indústria/B2B: manufatura, automação, fornecedores. Ciclo longo, decisão em comitê. Confiança e relacionamento acima de tudo. Feiras e LinkedIn são canais naturais.",
-}
 
 ORCHESTRATION_PROMPT = """Você é um orquestrador de prospecção B2B que analisa perfis de donos de pequenas e médias empresas brasileiras e decide a melhor forma de abordagem comercial.
 

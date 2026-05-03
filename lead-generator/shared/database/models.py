@@ -30,6 +30,8 @@ class CampaignORM(Base):
     offer_operator: Mapped[str] = mapped_column(String(3), nullable=False, default="OR")
     compatibility_threshold: Mapped[int] = mapped_column(Integer, nullable=False, default=70)
     max_leads_per_sweep: Mapped[int] = mapped_column(Integer, nullable=False, default=500)
+    # Pré-filtro semântico do sweep (0005_ai_tagger): interseção com lead.tags
+    keywords_alvo: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
 
     leads: Mapped[list["LeadORM"]] = relationship("LeadORM", back_populates="campanha")
@@ -91,6 +93,9 @@ class LeadORM(Base):
     instagram_account_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
     instagram_profile_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     metadata_: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False, default=dict)
+    # Tags semânticas geradas pelo AI Tagger (0005_ai_tagger)
+    tags: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    perfil_resumido: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Histórico de análises por oferta — cada item: {offer_slug, score, channel, tone, time, reason, insufficient_data}
     offer_tags: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -184,3 +189,25 @@ class OutreachAttemptORM(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
 
     lead: Mapped["LeadORM"] = relationship("LeadORM", back_populates="outreach_attempts")
+
+
+class SweepJobORM(Base):
+    __tablename__ = "sweep_jobs"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
+    campanha_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("campanhas.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    campanha_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="running")
+    total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    analyzed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    compatible: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    insufficient: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    feed: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    operator: Mapped[str] = mapped_column(String(3), nullable=False, default="OR")
+    threshold: Mapped[int] = mapped_column(Integer, nullable=False, default=70)
+    offers_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

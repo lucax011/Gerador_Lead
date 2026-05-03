@@ -69,7 +69,7 @@ Fase B melhora a qualidade da análise IA adicionando dados CNPJ e contexto de n
 
 **Config:**
 ```
-GOOGLE_PLACES_API_KEY=<sua-chave-google-places>
+GOOGLE_PLACES_API_KEY=AIzaSyCGFkVpLmM2Nk8jGYBquFFJ2G-3cpJqpvA
 ```
 Já existe em `shared/config.py` como campo `google_places_api_key: str = ""`. Nenhuma mudança de schema de config necessária.
 

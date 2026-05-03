@@ -34,6 +34,12 @@ class LeadEnrichedEvent(BaseEvent):
     sources_used: list[str] = Field(default_factory=list)
 
 
+class LeadTaggedEvent(BaseEvent):
+    event_type: str = "lead.tagged"
+    tags: list[str] = Field(default_factory=list)
+    perfil_resumido: str | None = None
+
+
 class LeadScoredEvent(BaseEvent):
     event_type: str = "lead.scored"
     score: float

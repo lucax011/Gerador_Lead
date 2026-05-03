@@ -11,6 +11,7 @@ class LeadStatus(str, Enum):
     VALIDATED = "validated"
     DEDUPLICATED = "deduplicated"
     ENRICHED = "enriched"
+    TAGGED = "tagged"
     SCORED = "scored"
     DISTRIBUTED = "distributed"
     CONTACTED = "contacted"
@@ -42,6 +43,8 @@ class Lead(BaseModel):
     instagram_account_type: str | None = None  # "personal" | "creator" | "business"
     instagram_profile_url: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)
+    perfil_resumido: str | None = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

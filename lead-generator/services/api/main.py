@@ -21,7 +21,8 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from shared.broker.rabbitmq import RabbitMQPublisher
 from shared.config import get_settings
-from shared.database.models import CampaignORM, LeadORM, OrchestrationORM, ScoreORM, SourceORM
+from shared.database.models import CampaignORM, EnrichmentORM, LeadORM, NicheORM, OrchestrationORM, ScoreORM, SourceORM, SweepJobORM
+from shared.niche_contexts import NICHE_CONTEXTS
 from shared.models.events import LeadCapturedEvent
 from shared.models.lead import Lead, LeadStatus
 
@@ -104,8 +105,14 @@ Avalie a compatibilidade e responda EXCLUSIVAMENTE em JSON válido, sem markdown
   "tone": "direto" | "educativo" | "prova_social" | "urgencia",
   "time": "HH:mm–HH:mm",
   "reason": "uma frase curta explicando a nota",
+  "score_breakdown": {{
+    "icp_match": número (aderência ao perfil ideal — soma com os outros dois deve igualar score),
+    "channel_readiness": número (prontidão para o canal de abordagem),
+    "data_quality": número (qualidade e completude dos dados do lead)
+  }},
   "insufficient_data": true ou false
-}}"""
+}}
+Importante: icp_match + channel_readiness + data_quality deve ser igual a score."""
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -124,6 +131,43 @@ def _esc_html(text: str) -> str:
 
 def _temperature_emoji(temperature: str | None) -> str:
     return {"HOT": "🔥", "WARM": "🌡️", "COLD": "🧊"}.get(temperature or "", "❓")
+
+
+async def _db_create_job(job: dict) -> None:
+    try:
+        async with AsyncSessionLocal() as session:
+            row = SweepJobORM(
+                id=UUID(job["job_id"]),
+                campanha_id=UUID(job["campanha_id"]),
+                campanha_name=job.get("campanha_name"),
+                status=job["status"],
+                total=job["total"],
+                analyzed=job["analyzed"],
+                compatible=job["compatible"],
+                insufficient=job["insufficient"],
+                feed=job["feed"],
+                operator=job.get("operator", "OR"),
+                threshold=job.get("threshold", 70),
+                offers_count=job.get("offers_count", 1),
+                error=job.get("error"),
+                started_at=datetime.fromisoformat(job["started_at"]),
+            )
+            session.add(row)
+            await session.commit()
+    except Exception as exc:
+        logger.warning("sweep_job_db_create_failed", job_id=job.get("job_id"), error=str(exc))
+
+
+async def _db_update_job(job_id: str, **fields) -> None:
+    try:
+        from sqlalchemy import update as sa_update
+        async with AsyncSessionLocal() as session:
+            await session.execute(
+                sa_update(SweepJobORM).where(SweepJobORM.id == UUID(job_id)).values(**fields)
+            )
+            await session.commit()
+    except Exception as exc:
+        logger.warning("sweep_job_db_update_failed", job_id=job_id, error=str(exc))
 
 
 async def _ensure_source(session: AsyncSession, source_name: str) -> SourceORM:
@@ -177,6 +221,18 @@ async def lifespan(app: FastAPI):
     global publisher
     publisher = RabbitMQPublisher(settings.rabbitmq_url)
     await publisher.connect()
+    # Mark any jobs that were running at last shutdown as interrupted
+    try:
+        from sqlalchemy import update as sa_update
+        async with AsyncSessionLocal() as session:
+            await session.execute(
+                sa_update(SweepJobORM)
+                .where(SweepJobORM.status == "running")
+                .values(status="interrupted")
+            )
+            await session.commit()
+    except Exception:
+        pass
     logger.info("api_service_started")
     yield
     if publisher:
@@ -381,7 +437,12 @@ async def update_lead_stage(lead_id: str, body: LeadStatusUpdate):
 
 # ── Sweep helpers ─────────────────────────────────────────────────────────────
 
-def _build_sweep_lead_profile(lead: LeadORM, score_obj: "ScoreORM | None") -> str:
+def _build_sweep_lead_profile(
+    lead: LeadORM,
+    score_obj: "ScoreORM | None",
+    enrichment: "EnrichmentORM | None" = None,
+    niche_context: str | None = None,
+) -> str:
     lines = [
         f"Nome: {lead.name}",
         f"Telefone: {lead.phone or 'não informado'}",
@@ -404,10 +465,46 @@ def _build_sweep_lead_profile(lead: LeadORM, score_obj: "ScoreORM | None") -> st
         lines.append(f"Tipo de conta: {lead.instagram_account_type}")
     if lead.instagram_bio:
         lines.append(f"Bio: {lead.instagram_bio[:200]}")
+
+    if enrichment:
+        cnpj = enrichment.cnpj_data or {}
+        if cnpj:
+            lines.append("— Empresa (CNPJ.ws) —")
+            if cnpj.get("razao_social"):
+                lines.append(f"Razão social: {cnpj['razao_social']}")
+            if cnpj.get("atividade_principal"):
+                lines.append(f"Atividade: {cnpj['atividade_principal']}")
+            if cnpj.get("porte"):
+                lines.append(f"Porte: {cnpj['porte']}")
+            if cnpj.get("situacao"):
+                lines.append(f"Situação: {cnpj['situacao']}")
+            if cnpj.get("municipio"):
+                lines.append(f"Município: {cnpj['municipio']} {cnpj.get('uf', '')}")
+            if cnpj.get("anos_atividade") is not None:
+                lines.append(f"Tempo de atividade: {cnpj['anos_atividade']} anos")
+
+    if niche_context:
+        lines.append("— Contexto do nicho —")
+        lines.append(niche_context)
+
     return "\n".join(lines)
 
 
-async def _call_openai_sweep_offer(offer: dict, lead: LeadORM, score_obj: "ScoreORM | None") -> dict | None:
+def _resolve_niche_context(lead: LeadORM) -> str | None:
+    meta = lead.metadata_ or {}
+    tag = meta.get("search_tag") or ""
+    slug = (lead.niche.slug if lead.niche else None) or ""
+    key = slug or tag.lower().replace(" ", "-")
+    return NICHE_CONTEXTS.get(key)
+
+
+async def _call_openai_sweep_offer(
+    offer: dict,
+    lead: LeadORM,
+    score_obj: "ScoreORM | None",
+    enrichment: "EnrichmentORM | None" = None,
+    niche_context: str | None = None,
+) -> dict | None:
     if not settings.openai_api_key:
         return None
     try:
@@ -415,7 +512,7 @@ async def _call_openai_sweep_offer(offer: dict, lead: LeadORM, score_obj: "Score
             offer_description=offer.get("description") or "não definida",
             ideal_customer_profile=offer.get("icp") or "não definido",
             ticket=offer.get("ticket") or "não informado",
-            lead_profile=_build_sweep_lead_profile(lead, score_obj),
+            lead_profile=_build_sweep_lead_profile(lead, score_obj, enrichment, niche_context),
         )
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
@@ -462,6 +559,7 @@ async def _run_sweep(job_id: str, campanha_id: UUID) -> None:
         if not campaign:
             job["status"] = "error"
             job["error"] = "Campanha não encontrada"
+            await _db_update_job(job_id, status="error", error=job["error"])
             return
 
         # Resolve effective offers: multi-offer list takes priority, fall back to legacy single-offer
@@ -481,17 +579,16 @@ async def _run_sweep(job_id: str, campanha_id: UUID) -> None:
         offer_slugs = {o.get("slug", campaign.slug) for o in offers}
 
         async with AsyncSessionLocal() as session:
-            q = select(LeadORM.id)
-            if campaign.focus_segments:
-                conditions = [LeadORM.metadata_["search_tag"].astext == seg for seg in campaign.focus_segments]
-                q = q.where(or_(*conditions))
-            else:
-                q = q.where(LeadORM.status == LeadStatus.SCORED.value)
+            q = select(LeadORM.id).where(LeadORM.status == LeadStatus.TAGGED.value)
+            if campaign.keywords_alvo:
+                overlap_conds = [LeadORM.tags.contains([kw]) for kw in campaign.keywords_alvo]
+                q = q.where(or_(*overlap_conds))
             q = q.limit(max_leads)
             result = await session.execute(q)
             lead_ids = [row[0] for row in result.all()]
 
         job["total"] = len(lead_ids)
+        await _db_create_job(job)
 
         for lead_id in lead_ids:
             while job["status"] == "paused":
@@ -501,7 +598,13 @@ async def _run_sweep(job_id: str, campanha_id: UUID) -> None:
 
             async with AsyncSessionLocal() as session:
                 lead_result = await session.execute(
-                    select(LeadORM).options(selectinload(LeadORM.scores)).where(LeadORM.id == lead_id)
+                    select(LeadORM)
+                    .options(
+                        selectinload(LeadORM.scores),
+                        selectinload(LeadORM.enrichment),
+                        selectinload(LeadORM.niche),
+                    )
+                    .where(LeadORM.id == lead_id)
                 )
                 lead = lead_result.scalar_one_or_none()
                 if not lead:
@@ -511,13 +614,18 @@ async def _run_sweep(job_id: str, campanha_id: UUID) -> None:
                 existing_tags = list(lead.offer_tags or [])
                 existing_slugs = {t.get("offer_slug") for t in existing_tags}
                 score_obj = lead.scores[0] if lead.scores else None
+                enrichment = lead.enrichment
+                niche_ctx = _resolve_niche_context(lead)
 
                 new_tags: list[dict] = []
                 for offer in offers:
                     offer_slug = offer.get("slug") or campaign.slug
                     if offer_slug in existing_slugs:
                         continue
-                    result_dict = await _call_openai_sweep_offer(offer, lead, score_obj) or _fallback_sweep(lead, score_obj)
+                    result_dict = (
+                        await _call_openai_sweep_offer(offer, lead, score_obj, enrichment, niche_ctx)
+                        or _fallback_sweep(lead, score_obj)
+                    )
                     new_tags.append({
                         "offer_slug": offer_slug,
                         "score": result_dict.get("score", 0),
@@ -525,6 +633,7 @@ async def _run_sweep(job_id: str, campanha_id: UUID) -> None:
                         "tone": result_dict.get("tone", "educativo"),
                         "time": result_dict.get("time", "—"),
                         "reason": result_dict.get("reason", ""),
+                        "score_breakdown": result_dict.get("score_breakdown"),
                         "insufficient_data": bool(result_dict.get("insufficient_data", False)),
                         "analyzed_at": datetime.utcnow().isoformat(),
                     })
@@ -561,13 +670,22 @@ async def _run_sweep(job_id: str, campanha_id: UUID) -> None:
                     "compatible": compatible,
                 }] + job["feed"])[:20]
 
+            await _db_update_job(
+                job_id,
+                analyzed=job["analyzed"],
+                compatible=job["compatible"],
+                insufficient=job["insufficient"],
+                feed=job["feed"],
+            )
             await asyncio.sleep(0.5)
 
         job["status"] = "completed"
+        await _db_update_job(job_id, status="completed", completed_at=datetime.utcnow())
     except Exception as exc:
         logger.error("sweep_failed", job_id=job_id, error=str(exc))
         job["status"] = "error"
         job["error"] = str(exc)
+        await _db_update_job(job_id, status="error", error=str(exc))
 
 
 # ── Analytics endpoints ────────────────────────────────────────────────────────
@@ -705,9 +823,44 @@ async def analisar_campanha(campanha_id: str):
 async def get_campanha_progresso(campanha_id: str):
     """Retorna o progresso da varredura mais recente de uma campanha."""
     matching = [j for j in sweep_jobs.values() if j["campanha_id"] == campanha_id]
-    if not matching:
+    if matching:
+        return sorted(matching, key=lambda j: j["started_at"], reverse=True)[0]
+
+    # Fallback: busca no banco o job mais recente para esta campanha
+    try:
+        camp_uuid = UUID(campanha_id)
+    except ValueError:
         raise HTTPException(status_code=404, detail="Nenhuma varredura encontrada para esta campanha")
-    return sorted(matching, key=lambda j: j["started_at"], reverse=True)[0]
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(SweepJobORM)
+                .where(SweepJobORM.campanha_id == camp_uuid)
+                .order_by(SweepJobORM.started_at.desc())
+                .limit(1)
+            )
+            db_job = result.scalar_one_or_none()
+    except Exception:
+        raise HTTPException(status_code=404, detail="Nenhuma varredura encontrada para esta campanha")
+    if not db_job:
+        raise HTTPException(status_code=404, detail="Nenhuma varredura encontrada para esta campanha")
+    return {
+        "job_id":        str(db_job.id),
+        "campanha_id":   str(db_job.campanha_id),
+        "campanha_name": db_job.campanha_name,
+        "status":        db_job.status,
+        "total":         db_job.total,
+        "analyzed":      db_job.analyzed,
+        "compatible":    db_job.compatible,
+        "insufficient":  db_job.insufficient,
+        "feed":          db_job.feed or [],
+        "operator":      db_job.operator,
+        "threshold":     db_job.threshold,
+        "offers_count":  db_job.offers_count,
+        "error":         db_job.error,
+        "started_at":    db_job.started_at.isoformat(),
+        "completed_at":  db_job.completed_at.isoformat() if db_job.completed_at else None,
+    }
 
 
 @app.post("/api/jobs/{job_id}/pausar", status_code=200)
@@ -885,6 +1038,78 @@ async def update_campanha(campanha_id: str, body: CampanhaWriteRequest):
         await session.commit()
     logger.info("campanha_updated", campanha_id=campanha_id)
     return {"id": campanha_id, "status": "updated"}
+
+
+# ── Search proxy (Google Places backend) ──────────────────────────────────────
+
+class SearchRequest(BaseModel):
+    terms: list[str]
+    city: str
+    state: str = ""
+    neighborhood: str = ""
+    max_results: int = 20
+    campanha_id: str | None = None
+
+
+_MAPS_FIELD_MASK = (
+    "places.displayName,places.formattedAddress,places.nationalPhoneNumber,"
+    "places.websiteUri,places.rating,places.userRatingCount,places.types,"
+    "places.businessStatus,places.id,places.location"
+)
+_INSTAGRAM_RE = re.compile(r"instagram\.com/([A-Za-z0-9_.]+)", re.IGNORECASE)
+
+
+@app.post("/api/search")
+async def search_places(body: SearchRequest):
+    """Proxy para Google Places textSearch — evita expor a API key no browser."""
+    if not settings.google_places_api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="GOOGLE_PLACES_API_KEY não configurada. Adicione ao .env e reinicie a API.",
+        )
+
+    location_parts = [p for p in [body.neighborhood, body.city, body.state] if p]
+    location_str = ", ".join(location_parts)
+
+    seen: set[tuple[str, str]] = set()
+    results: list[dict] = []
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        for term in body.terms:
+            query = f"{term} em {location_str}"
+            try:
+                resp = await client.post(
+                    "https://places.googleapis.com/v1/places:searchText",
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Goog-Api-Key": settings.google_places_api_key,
+                        "X-Goog-FieldMask": _MAPS_FIELD_MASK,
+                    },
+                    json={
+                        "textQuery": query,
+                        "maxResultCount": min(body.max_results, 20),
+                        "languageCode": "pt-BR",
+                    },
+                )
+                resp.raise_for_status()
+                places = resp.json().get("places") or []
+                for place in places:
+                    name_key = (place.get("displayName", {}).get("text", "").lower(), place.get("nationalPhoneNumber", ""))
+                    if name_key in seen:
+                        continue
+                    seen.add(name_key)
+                    ig_match = _INSTAGRAM_RE.search(place.get("websiteUri") or "")
+                    place["instagram_username"] = ig_match.group(1) if ig_match else None
+                    place["_query"] = term
+                    place["_location"] = location_str
+                    place["_source"] = "niche"
+                    results.append(place)
+            except httpx.HTTPStatusError as exc:
+                logger.warning("places_api_error", term=term, status=exc.response.status_code)
+            except Exception as exc:
+                logger.warning("places_api_failed", term=term, error=str(exc))
+
+    return {"results": results, "total": len(results)}
 
 
 # ── Static (frontend dashboard) ────────────────────────────────────────────────

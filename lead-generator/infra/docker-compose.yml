@@ -103,6 +103,13 @@ services:
       dockerfile: services/scorer/Dockerfile
     container_name: lead-scorer
 
+  tagger:
+    <<: *worker-base
+    build:
+      context: ..
+      dockerfile: services/tagger/Dockerfile
+    container_name: lead-tagger
+
   orchestrator:
     <<: *worker-base
     build:
