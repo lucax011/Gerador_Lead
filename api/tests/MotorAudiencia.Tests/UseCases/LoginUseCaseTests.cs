@@ -32,6 +32,8 @@ public class LoginUseCaseTests
 
         result.IsSuccess.Should().BeTrue();
         result.Value!.AccessToken.Should().Be("access-token");
+        result.Value!.RefreshToken.Should().Be("refresh-token");
+        result.Value!.RefreshExpiresAt.Should().BeAfter(DateTime.UtcNow);
     }
 
     [Fact]
