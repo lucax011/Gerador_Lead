@@ -49,5 +49,6 @@ public class JwtServiceTests
         result.Token.Should().NotBeNullOrEmpty();
         result.UserId.Should().Be(userId);
         result.ExpiresAt.Should().BeAfter(DateTime.UtcNow);
+        result.FamilyId.Should().NotBeEmpty();
     }
 }
