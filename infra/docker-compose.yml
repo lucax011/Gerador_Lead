@@ -62,14 +62,42 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # api:  # Uncomment after Task 8 (api/Dockerfile)
-  #   <<: *worker-base
-  #   build:
-  #     context: ../api
-  #     dockerfile: Dockerfile
-  #   container_name: ma-api
-  #   ports:
-  #     - "5000:5000"
+  api:
+    <<: *worker-base
+    build:
+      context: ../api
+      dockerfile: Dockerfile
+    container_name: ma-api
+    ports:
+      - "5000:5000"
+
+  validator:
+    <<: *worker-base
+    build:
+      context: ../api
+      dockerfile: workers/MotorAudiencia.ValidatorWorker/Dockerfile
+    container_name: ma-validator
+
+  deduplicator:
+    <<: *worker-base
+    build:
+      context: ../api
+      dockerfile: workers/MotorAudiencia.DeduplicatorWorker/Dockerfile
+    container_name: ma-deduplicator
+
+  enricher:
+    <<: *worker-base
+    build:
+      context: ../api
+      dockerfile: workers/MotorAudiencia.EnricherWorker/Dockerfile
+    container_name: ma-enricher
+
+  scorer:
+    <<: *worker-base
+    build:
+      context: ../api
+      dockerfile: workers/MotorAudiencia.ScorerWorker/Dockerfile
+    container_name: ma-scorer
 
 networks:
   ma-net:
