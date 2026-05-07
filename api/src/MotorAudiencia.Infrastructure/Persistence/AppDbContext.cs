@@ -8,6 +8,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 {
     public DbSet<User> Users => Set<User>();
     public DbSet<RefreshTokenEntity> RefreshTokens => Set<RefreshTokenEntity>();
+    public DbSet<Lead> Leads => Set<Lead>();
+    public DbSet<Source> Sources => Set<Source>();
+    public DbSet<Niche> Niches => Set<Niche>();
+    public DbSet<Score> Scores => Set<Score>();
+    public DbSet<Campaign> Campaigns => Set<Campaign>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
