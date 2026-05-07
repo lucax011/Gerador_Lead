@@ -8,7 +8,6 @@ public enum LeadStatus
     Deduplicated,
     Enriched,
     Scored,
-    Tagged,
     Orchestrated,
     Distributed,
     Contacted,
