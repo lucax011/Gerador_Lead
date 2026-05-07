@@ -12,6 +12,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Source> Sources => Set<Source>();
     public DbSet<Niche> Niches => Set<Niche>();
     public DbSet<Score> Scores => Set<Score>();
+    public DbSet<Campaign> Campaigns => Set<Campaign>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
