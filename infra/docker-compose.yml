@@ -99,6 +99,13 @@ services:
       dockerfile: workers/MotorAudiencia.ScorerWorker/Dockerfile
     container_name: ma-scorer
 
+  orchestrator:
+    <<: *worker-base
+    build:
+      context: ../api
+      dockerfile: workers/MotorAudiencia.OrchestratorWorker/Dockerfile
+    container_name: ma-orchestrator
+
 networks:
   ma-net:
     driver: bridge
