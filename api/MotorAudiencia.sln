@@ -27,6 +27,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MotorAudiencia.EnricherWork
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MotorAudiencia.ScorerWorker", "workers\MotorAudiencia.ScorerWorker\MotorAudiencia.ScorerWorker.csproj", "{CC204E3A-37E8-49A3-9D56-EEA17C3E73C1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MotorAudiencia.OrchestratorWorker", "workers\MotorAudiencia.OrchestratorWorker\MotorAudiencia.OrchestratorWorker.csproj", "{AA7DDEB9-8BE6-4679-B23F-2D675FAE7ED3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -72,6 +74,10 @@ Global
 		{CC204E3A-37E8-49A3-9D56-EEA17C3E73C1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{CC204E3A-37E8-49A3-9D56-EEA17C3E73C1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{CC204E3A-37E8-49A3-9D56-EEA17C3E73C1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AA7DDEB9-8BE6-4679-B23F-2D675FAE7ED3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AA7DDEB9-8BE6-4679-B23F-2D675FAE7ED3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AA7DDEB9-8BE6-4679-B23F-2D675FAE7ED3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AA7DDEB9-8BE6-4679-B23F-2D675FAE7ED3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{D83BCF6C-31FB-40B3-BE7C-E70575AFD9EC} = {DC297990-5BCF-41E8-B1E6-1242AD16DA72}
@@ -83,5 +89,6 @@ Global
 		{CC316325-EE6D-4D6A-917F-D8814F3B2E39} = {9635C57E-2A5A-454B-A3F0-218660A522FF}
 		{01311067-0CF3-42AB-877E-9FDD1C937055} = {9635C57E-2A5A-454B-A3F0-218660A522FF}
 		{CC204E3A-37E8-49A3-9D56-EEA17C3E73C1} = {9635C57E-2A5A-454B-A3F0-218660A522FF}
+		{AA7DDEB9-8BE6-4679-B23F-2D675FAE7ED3} = {9635C57E-2A5A-454B-A3F0-218660A522FF}
 	EndGlobalSection
 EndGlobal
