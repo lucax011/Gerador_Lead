@@ -32,8 +32,9 @@ public sealed class LeadConfiguration : IEntityTypeConfiguration<Lead>
         builder.Property(l => l.MetadataJson).HasColumnType("jsonb").HasColumnName("metadata");
         builder.Property(l => l.OfferTagsJson).HasColumnType("jsonb").HasColumnName("offer_tags");
         builder.Property(l => l.CnpjDataJson).HasColumnType("jsonb").HasColumnName("cnpj_data");
+        builder.Property(l => l.TagsJson).HasColumnType("jsonb").HasColumnName("tags");
 
-        builder.Ignore(l => l.Tags); // mapped separately if needed
+        builder.Ignore(l => l.Tags);
         builder.Property(l => l.PerfilResumido).HasMaxLength(2000);
 
         builder.Property(l => l.CreatedAt).IsRequired();

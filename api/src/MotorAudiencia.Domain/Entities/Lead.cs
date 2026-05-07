@@ -30,8 +30,11 @@ public sealed class Lead
     public string? OfferTagsJson { get; private set; }
     public string? CnpjDataJson { get; private set; }
 
-    private List<string> _tags = [];
-    public IReadOnlyList<string> Tags => _tags.AsReadOnly();
+    public string? TagsJson { get; private set; }
+    public IReadOnlyList<string> Tags =>
+        string.IsNullOrEmpty(TagsJson)
+            ? []
+            : JsonSerializer.Deserialize<List<string>>(TagsJson) ?? [];
     public string? PerfilResumido { get; private set; }
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; private set; } = DateTime.UtcNow;
@@ -88,7 +91,8 @@ public sealed class Lead
 
     public void SetTags(IEnumerable<string> tags)
     {
-        _tags = [..tags];
+        var list = tags.ToList();
+        TagsJson = list.Count > 0 ? JsonSerializer.Serialize(list) : null;
         UpdatedAt = DateTime.UtcNow;
     }
 
